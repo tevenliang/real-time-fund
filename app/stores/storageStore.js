@@ -327,6 +327,14 @@ export const useStorageStore = create((set, get) => ({
           DEFAULT_SORT_RULES.forEach((rule) => {
             if (!merged.some((r) => r.id === rule.id)) merged.push(rule);
           });
+          // 研究类指标列（波段信号/年化收益/最大回撤/年化波动/夏普比率）默认开启表头点击排序：
+          // 即便本地旧配置曾将其设为关闭，也强制启用，满足“直接点表头排序”的明确需求。
+          const FORCE_ENABLED_RESEARCH_IDS = [
+            'researchSignal', 'researchCagr', 'researchMdd', 'researchVol', 'researchSharpe'
+          ];
+          merged.forEach((r) => {
+            if (FORCE_ENABLED_RESEARCH_IDS.includes(r.id)) r.enabled = true;
+          });
           nextState.sortRules = merged;
         }
       }
