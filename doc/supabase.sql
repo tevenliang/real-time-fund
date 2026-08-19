@@ -1,10 +1,11 @@
 -- ========================================================
 -- Real-Time Fund (基估宝) - Supabase Schema
 -- ========================================================
--- 修正版：修复原文件两处语法错误
+-- 修正版 v2：修复原文件语法错误 + 所有 CREATE POLICY 前置 DROP POLICY IF EXISTS（幂等，可任意次重跑）
 --   1) GRANT EXECUTE ... USING (true)  ->  GRANT EXECUTE ... TO anon, authenticated
 --   2) CREATE POLICY 重复 USING 子句   ->  合并为单一 USING
---   3) CREATE TABLE / CREATE INDEX 改为 IF NOT EXISTS（幂等，可安全重跑）
+--   3) CREATE TABLE / CREATE INDEX 改为 IF NOT EXISTS
+--   4) 所有 CREATE POLICY 前置 DROP POLICY IF EXISTS（应对部分执行的残留）
 
 
 -- ========================================================
@@ -168,6 +169,7 @@ CREATE TABLE IF NOT EXISTS public.fund_related (
 
 ALTER TABLE public.fund_related ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow public select fund_related" ON public.fund_related;
 CREATE POLICY "Allow public select fund_related"
 ON public.fund_related
 FOR SELECT
@@ -186,6 +188,7 @@ CREATE TABLE IF NOT EXISTS public.fund_secid (
 
 ALTER TABLE public.fund_secid ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow public select fund_secid" ON public.fund_secid;
 CREATE POLICY "Allow public select fund_secid"
 ON public.fund_secid
 FOR SELECT
@@ -211,6 +214,7 @@ CREATE TABLE IF NOT EXISTS public.fund_topic (
 
 ALTER TABLE public.fund_topic ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "允许已登录用户读取基金主题数据" ON public.fund_topic;
 CREATE POLICY "允许已登录用户读取基金主题数据"
 ON public.fund_topic
 FOR SELECT
@@ -239,6 +243,7 @@ CREATE INDEX IF NOT EXISTS idx_ocr_daily_usage_user_date ON public.ocr_daily_usa
 ALTER TABLE public.ocr_daily_usage ENABLE ROW LEVEL SECURITY;
 
 -- 允许已登录用户查看自己的用量
+DROP POLICY IF EXISTS "ocr_usage_select_own" ON public.ocr_daily_usage;
 CREATE POLICY "ocr_usage_select_own"
 ON public.ocr_daily_usage
 FOR SELECT
