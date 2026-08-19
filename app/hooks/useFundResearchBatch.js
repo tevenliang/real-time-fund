@@ -44,9 +44,10 @@ export function useFundResearchBatch(codes, visibility) {
     queries: normalizedCodes.map((code, idx) => ({
       queryKey: qk.fundResearch(code),
       queryFn: fetchFundResearchOnce(code),
-      staleTime: 4 * 60 * 60 * 1000,
-      gcTime: 24 * 60 * 60 * 1000,
-      retry: 1,
+      staleTime: 12 * 60 * 60 * 1000,
+      gcTime: 48 * 60 * 60 * 1000,
+      refetchOnMount: false,
+      retry: false,
       enabled: vis ? Boolean(vis[idx]) : true,
     })),
   });

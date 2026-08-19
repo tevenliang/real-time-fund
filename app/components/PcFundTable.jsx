@@ -1270,6 +1270,11 @@ const PcFundTable = memo(function PcFundTable({
       const t = lbl != null ? String(lbl).trim() : '';
       if (t) labels.add(t);
     }
+    // 补充本地 JSON 中已有的 relatedSector（板块名称），保证行情能拉到
+    for (const f of data || []) {
+      const t = f && f.relatedSector != null ? String(f.relatedSector).trim() : '';
+      if (t && t !== '') labels.add(t);
+    }
     const labelList = Array.from(labels);
     if (labelList.length === 0) return;
 
@@ -1321,16 +1326,28 @@ const PcFundTable = memo(function PcFundTable({
       if (!row || !row.code) return row;
       const rawValue = relatedSectorByCode?.[row.code] ?? relatedSectorCacheRef.current.get(row.code) ?? row.rawFund?.relatedSector ?? '';
       const relatedSector = rawValue != null ? String(rawValue).trim() : '';
-      const quote = relatedSector ? sectorQuoteByLabel?.[relatedSector] : null;
-      const quoteName = quote?.name != null ? String(quote.name).trim() : '';
-      const quotePct = quote?.pct == null ? null : Number(quote.pct);
-      const hasQuotePct = quotePct != null && Number.isFinite(quotePct);
+
+      // sector ID（BK开头）没有公开行情 API，直接显示"板块:BKxxxxxx"
+      const isSectorId = /^BK\d+$/.test(relatedSector);
+      let displaySector = relatedSector;
+      let quoteName = '';
+      let quotePct = null;
+      let hasQuotePct = false;
+
+      if (isSectorId) {
+        displaySector = '板块:' + relatedSector;
+      } else {
+        const quote = relatedSector ? sectorQuoteByLabel?.[relatedSector] : null;
+        quoteName = quote?.name != null ? String(quote.name).trim() : '';
+        quotePct = quote?.pct == null ? null : Number(quote.pct);
+        hasQuotePct = quotePct != null && Number.isFinite(quotePct);
+      }
 
       return {
         ...row,
         rawFund: {
           ...(row.rawFund || { code: row.code, name: row.fundName }),
-          relatedSector,
+          relatedSector: displaySector,
           relatedSectorQuoteName: quoteName,
           relatedSectorQuotePct: hasQuotePct ? quotePct : null
         }
@@ -3166,12 +3183,12 @@ const PcFundTable = memo(function PcFundTable({
                                     isSelected={selectedCodes?.has?.(row.original.code)}
                                     masked={masked}
                                     periodReturns={periodReturnsByCode[row.original.code]}
-                                    relatedSector={relatedSectorByCode[row.original.code]}
+                                    relatedSector={relatedSectorByCode[row.original.code] ?? row.original.relatedSector ?? ''}
                                     sectorQuote={
-                                      relatedSectorByCode[row.original.code]
-                                        ? sectorQuoteByLabel[String(relatedSectorByCode[row.original.code]).trim()]
+                                      (relatedSectorByCode[row.original.code] ?? row.original.relatedSector)
+                                        ? sectorQuoteByLabel[String(relatedSectorByCode[row.original.code] ?? row.original.relatedSector).trim()]
                                         : null
-                                    }
+                                      }
                                     fundExtraData={fundExtraDataByCode[row.original.code]}
                                     columnOrder={columnOrder}
                                     columnVisibility={columnVisibility}
@@ -3211,12 +3228,12 @@ const PcFundTable = memo(function PcFundTable({
                                 isSelected={selectedCodes?.has?.(row.original.code)}
                                 masked={masked}
                                 periodReturns={periodReturnsByCode[row.original.code]}
-                                relatedSector={relatedSectorByCode[row.original.code]}
+                                relatedSector={relatedSectorByCode[row.original.code] ?? row.original.relatedSector ?? ''}
                                 sectorQuote={
-                                  relatedSectorByCode[row.original.code]
-                                    ? sectorQuoteByLabel[String(relatedSectorByCode[row.original.code]).trim()]
+                                  (relatedSectorByCode[row.original.code] ?? row.original.relatedSector)
+                                    ? sectorQuoteByLabel[String(relatedSectorByCode[row.original.code] ?? row.original.relatedSector).trim()]
                                     : null
-                                }
+                                  }
                                 fundExtraData={fundExtraDataByCode[row.original.code]}
                                 columnOrder={columnOrder}
                                 columnVisibility={columnVisibility}
@@ -3238,12 +3255,12 @@ const PcFundTable = memo(function PcFundTable({
                                 isSelected={selectedCodes?.has?.(row.original.code)}
                                 masked={masked}
                                 periodReturns={periodReturnsByCode[row.original.code]}
-                                relatedSector={relatedSectorByCode[row.original.code]}
+                                relatedSector={relatedSectorByCode[row.original.code] ?? row.original.relatedSector ?? ''}
                                 sectorQuote={
-                                  relatedSectorByCode[row.original.code]
-                                    ? sectorQuoteByLabel[String(relatedSectorByCode[row.original.code]).trim()]
+                                  (relatedSectorByCode[row.original.code] ?? row.original.relatedSector)
+                                    ? sectorQuoteByLabel[String(relatedSectorByCode[row.original.code] ?? row.original.relatedSector).trim()]
                                     : null
-                                }
+                                  }
                                 fundExtraData={fundExtraDataByCode[row.original.code]}
                                 columnOrder={columnOrder}
                                 columnVisibility={columnVisibility}

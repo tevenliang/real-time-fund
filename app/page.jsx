@@ -83,7 +83,7 @@ import {
   DEFAULT_FUND_TAG_THEME,
   DEFAULT_SORT_RULES
 } from '@/app/constants';
-import { useFundResearchBatch } from '@/app/hooks/useFundResearchBatch';
+import { useFundResearchBatch, refetchFundResearch } from '@/app/hooks/useFundResearchBatch';
 import { getQueryClient } from './lib/get-query-client';
 
 dayjs.extend(utc);
@@ -831,14 +831,8 @@ export default function HomePage() {
     if (!codes.length) return;
     setResearchRefreshing(true);
     try {
-      const BATCH = 30;
       const qc = getQueryClient();
-      for (let i = 0; i < codes.length; i += BATCH) {
-        const chunk = codes.slice(i, i + BATCH);
-        await asyncPool(8, chunk, (code) =>
-          qc.invalidateQueries({ queryKey: ['fund', code, 'research'] })
-        );
-      }
+      await refetchFundResearch(qc, codes);
     } finally {
       setResearchRefreshing(false);
     }
