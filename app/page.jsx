@@ -28,7 +28,7 @@ import FundCard from './components/FundCard';
 
 import GroupSummary from './components/GroupSummary';
 import GroupAccountSummaryCard from './components/GroupAccountSummaryCard';
-import { CloseIcon, GridIcon, ListIcon, MoonIcon, PlusIcon, SettingsIcon, SortIcon, SunIcon } from './components/Icons';
+import { CloseIcon, GridIcon, ListIcon, MoonIcon, PlusIcon, RefreshIcon, SettingsIcon, SortIcon, SunIcon } from './components/Icons';
 import UserMenu from './components/UserMenu';
 import RefreshButton from './components/RefreshButton';
 const UpdateChecker = dynamic(() => import('./components/UpdateChecker'), { ssr: false });
@@ -84,6 +84,7 @@ import {
   DEFAULT_SORT_RULES
 } from '@/app/constants';
 import { useFundResearchBatch } from '@/app/hooks/useFundResearchBatch';
+import { getQueryClient } from './lib/get-query-client';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -823,6 +824,26 @@ export default function HomePage() {
   // 基金研究数据（波段/风险指标），给排序和显示共用
   const _scopedCodes = useMemo(() => (Array.isArray(scopedFunds) ? scopedFunds.map((f) => f?.code).filter(Boolean) : []), [scopedFunds]);
   const researchByCode = useFundResearchBatch(_scopedCodes);
+  // 批量刷新全部研究数据（invalidate 触发 stale，下次访问自动 refetch）
+  const [researchRefreshing, setResearchRefreshing] = useState(false);
+  const handleRefreshResearch = useCallback(async () => {
+    const codes = _scopedCodes;
+    if (!codes.length) return;
+    setResearchRefreshing(true);
+    try {
+      const BATCH = 30;
+      const qc = getQueryClient();
+      for (let i = 0; i < codes.length; i += BATCH) {
+        const chunk = codes.slice(i, i + BATCH);
+        await asyncPool(8, chunk, (code) =>
+          qc.invalidateQueries({ queryKey: ['fund', code, 'research'] })
+        );
+      }
+    } finally {
+      setResearchRefreshing(false);
+    }
+  }, [_scopedCodes]);
+  const researchIsFetching = Object.values(researchByCode).some((q) => q?.isLoading);
 
   const displayFundsRaw = useMemo(() => {
     let filtered = [...scopedFunds];
@@ -5156,6 +5177,40 @@ export default function HomePage() {
                         </div>
                       )}
                     </div>
+
+                    <div className="divider" style={{ width: '1px', height: '20px', background: 'var(--border)' }} />
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="icon-button"
+                          onClick={handleRefreshResearch}
+                          disabled={researchRefreshing || !_scopedCodes.length}
+                          aria-label="刷新研究数据"
+                          style={{
+                            border: 'none',
+                            width: '32px',
+                            height: '32px',
+                            background: researchRefreshing ? 'var(--primary)' : 'transparent',
+                            color: researchRefreshing ? '#05263b' : 'var(--muted)',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <RefreshIcon
+                            className={researchRefreshing ? 'spin' : ''}
+                            width="16"
+                            height="16"
+                            style={{ color: researchRefreshing ? '#05263b' : 'inherit' }}
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{researchRefreshing ? '研究数据刷新中…' : `刷新研究数据 (${_scopedCodes.length} 只)`}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
 
