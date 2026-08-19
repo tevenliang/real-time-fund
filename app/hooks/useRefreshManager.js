@@ -503,6 +503,10 @@ export function useRefreshManager({ scheduleDcaTrades, processPendingQueue, devi
               if (f.autoSource != null) merged.autoSource = f.autoSource;
               if (f.showImageChart !== undefined) merged.showImageChart = f.showImageChart;
               if (f.confirmDays != null) merged.confirmDays = f.confirmDays;
+              // 保留关联板块字段（行情刷新不改变板块归属，白名单缺失会导致 relatedSector 被剥掉）
+              if (f.relatedSector != null && merged.relatedSector == null) merged.relatedSector = f.relatedSector;
+              if (f.relatedSectorUpdatedAt != null && merged.relatedSectorUpdatedAt == null) merged.relatedSectorUpdatedAt = f.relatedSectorUpdatedAt;
+              if (f.sectorIds != null && merged.sectorIds == null) merged.sectorIds = f.sectorIds;
               if (merged.addedAt == null || merged.addBaseNav == null || merged.addBaseDate == null) {
                 const snap = getAddBaseSnapshotFromFund(merged);
                 if (merged.addedAt == null) merged.addedAt = Date.now();

@@ -3958,7 +3958,17 @@ export default function HomePage() {
           const existingCodes = new Set(currentFunds.map((f) => f.code));
           const newItems = incomingFunds.filter((f) => f && f.code && !existingCodes.has(f.code));
           appendedCodes = newItems.map((f) => f.code);
-          mergedFunds = [...currentFunds, ...newItems];
+          // 已存在但本地缺失关联板块的基金：从导入数据补回（修复历史被行情刷新剥掉的字段）
+          const incomingByCode = new Map(incomingFunds.filter((f) => f && f.code).map((f) => [f.code, f]));
+          mergedFunds = currentFunds.map((f) => {
+            const inc = incomingByCode.get(f.code);
+            if (!inc) return f;
+            if (f.relatedSector == null && inc.relatedSector != null) {
+              return { ...f, relatedSector: inc.relatedSector, relatedSectorUpdatedAt: inc.relatedSectorUpdatedAt, sectorIds: inc.sectorIds };
+            }
+            return f;
+          });
+          mergedFunds = [...mergedFunds, ...newItems];
           setFunds(mergedFunds);
         }
 
