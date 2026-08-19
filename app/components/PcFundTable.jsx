@@ -2909,7 +2909,8 @@ const PcFundTable = memo(function PcFundTable({
         researchCagr: 'researchCagr',
         researchMdd: 'researchMdd',
         researchVol: 'researchVol',
-        researchSharpe: 'researchSharpe'
+        researchSharpe: 'researchSharpe',
+        relatedSector: 'relatedSector'
       };
       const sortKey = sortMap[columnId];
       const isSorted = !!sortBy && sortKey === sortBy;

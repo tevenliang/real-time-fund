@@ -52,6 +52,7 @@ export const DEFAULT_SORT_RULES = [
   { id: 'researchMdd', label: '最大回撤', enabled: true },
   { id: 'researchVol', label: '年化波动', enabled: true },
   { id: 'researchSharpe', label: '夏普比率', enabled: true },
+  { id: 'relatedSector', label: '关联板块', enabled: true },
   { id: 'name', label: '基金名称', alias: '名称', enabled: true }
 ];
 

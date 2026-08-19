@@ -43,7 +43,8 @@ import {
   fetchSmartFundNetValue,
   fetchSmartFundNetValueBackward,
   fetchFundPeriodReturns,
-  searchFunds
+  searchFunds,
+  fetchRelatedSectorsBatch
 } from './api/fund';
 import PcFundTable from './components/PcFundTable';
 import MobileFundTable from './components/MobileFundTable';
@@ -824,6 +825,17 @@ export default function HomePage() {
   // 基金研究数据（波段/风险指标），给排序和显示共用
   const _scopedCodes = useMemo(() => (Array.isArray(scopedFunds) ? scopedFunds.map((f) => f?.code).filter(Boolean) : []), [scopedFunds]);
   const researchByCode = useFundResearchBatch(_scopedCodes);
+  // 关联板块（用于列表排序）
+  const scopedCodesKey = _scopedCodes.join('|');
+  const [relatedSectorByCode, setRelatedSectorByCode] = useState({});
+  useEffect(() => {
+    if (!_scopedCodes.length) return;
+    let cancelled = false;
+    fetchRelatedSectorsBatch(_scopedCodes, { authSegment: 'anon' })
+      .then((m) => { if (!cancelled) setRelatedSectorByCode(m || {}); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [scopedCodesKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // 批量刷新全部研究数据（invalidate 触发 stale，下次访问自动 refetch）
   const [researchRefreshing, setResearchRefreshing] = useState(false);
   const handleRefreshResearch = useCallback(async () => {
@@ -1189,6 +1201,15 @@ export default function HomePage() {
         if (!hasB) return -1;
         return sortOrder === 'asc' ? va - vb : vb - va;
       }
+      if (sortBy === 'relatedSector') {
+        const get = (f) => relatedSectorByCode?.[f.code] ?? f.relatedSector ?? '';
+        const va = String(get(a) || '').trim();
+        const vb = String(get(b) || '').trim();
+        if (!va && !vb) return 0;
+        if (!va) return 1;
+        if (!vb) return -1;
+        return sortOrder === 'asc' ? va.localeCompare(vb, 'zh-CN') : vb.localeCompare(va, 'zh-CN');
+      }
       if (sortBy === 'name') {
         const nameA = a.name ?? '';
         const nameB = b.name ?? '';
@@ -1209,7 +1230,8 @@ export default function HomePage() {
     currentFundDailyEarnings,
     fundExtraDataByCode,
     todayStr,
-    fundTagListsByCode
+    fundTagListsByCode,
+    relatedSectorByCode
   ]);
 
   const displayFunds = useDeferredValue(displayFundsRaw);
