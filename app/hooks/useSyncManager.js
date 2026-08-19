@@ -1200,7 +1200,9 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
             const merged = { ...cloudData.customSettings };
             useStorageStore.getState().setCustomSettings(merged);
             if (merged.localSortRules && isArray(merged.localSortRules)) {
-              useStorageStore.getState().setSortRules(merged.localSortRules);
+              // 云端旧排序规则不能原样覆盖：需与 DEFAULT_SORT_RULES 合并并
+              // 强制启用研究指标/关联板块，否则右上角选择器会丢失这些选项
+              useStorageStore.getState().applyCloudSortRules(merged.localSortRules);
             }
             if (isString(merged.localSortDisplayMode) && SORT_DISPLAY_MODES.has(merged.localSortDisplayMode)) {
               useStorageStore.getState().setPcSortDisplayMode(merged.localSortDisplayMode);

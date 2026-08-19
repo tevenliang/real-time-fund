@@ -129,6 +129,47 @@ const normalizeStorageValue = (key, value) => {
 /**
  * 管理 localStorage 数据的 Zustand Store
  */
+/**
+ * 将存储/云端来源的排序规则与 DEFAULT_SORT_RULES 合并：
+ * - 补齐新增规则（旧数据缺失时按默认值追加）
+ * - 保留用户自定义 alias
+ * - 强制启用表头排序所需的规则（研究指标 + 关联板块）
+ * 供 initSort 与云端配置回放（applyCloudSortRules）共用，
+ * 避免云端旧 localSortRules 覆盖后这些规则被禁用/丢失。
+ */
+const FORCE_ENABLED_SORT_IDS = [
+  'researchSignal',
+  'researchCagr',
+  'researchMdd',
+  'researchVol',
+  'researchSharpe',
+  'relatedSector'
+];
+
+export const mergeSortRulesWithDefaults = (rulesFromSettings) => {
+  if (!isArray(rulesFromSettings) || !rulesFromSettings.length) {
+    return DEFAULT_SORT_RULES.map((r) => ({ ...r }));
+  }
+  const defaultMap = new Map(DEFAULT_SORT_RULES.map((r) => [r.id, r]));
+  const merged = [];
+  for (const stored of rulesFromSettings) {
+    const base = defaultMap.get(stored?.id);
+    if (!base) continue;
+    merged.push({
+      ...base,
+      enabled: isBoolean(stored.enabled) ? stored.enabled : base.enabled,
+      alias: isString(stored.alias) && stored.alias.trim() ? stored.alias.trim() : base.alias
+    });
+  }
+  DEFAULT_SORT_RULES.forEach((rule) => {
+    if (!merged.some((r) => r.id === rule.id)) merged.push({ ...rule });
+  });
+  merged.forEach((r) => {
+    if (FORCE_ENABLED_SORT_IDS.includes(r.id)) r.enabled = true;
+  });
+  return merged;
+};
+
 export const useStorageStore = create((set, get) => ({
   // 云端同步回调，由 Page 组件注入
   onSync: null,
@@ -312,30 +353,7 @@ export const useStorageStore = create((set, get) => ({
         }
 
         if (rulesFromSettings && rulesFromSettings.length) {
-          const defaultMap = new Map(DEFAULT_SORT_RULES.map((r) => [r.id, r]));
-          const merged = [];
-          for (const stored of rulesFromSettings) {
-            const base = defaultMap.get(stored.id);
-            if (!base) continue;
-            merged.push({
-              ...base,
-              enabled: isBoolean(stored.enabled) ? stored.enabled : base.enabled,
-              alias: isString(stored.alias) && stored.alias.trim() ? stored.alias.trim() : base.alias
-            });
-          }
-          // 追加新版本新增但本地未记录的规则
-          DEFAULT_SORT_RULES.forEach((rule) => {
-            if (!merged.some((r) => r.id === rule.id)) merged.push(rule);
-          });
-          // 研究类指标列（波段信号/年化收益/最大回撤/年化波动/夏普比率）默认开启表头点击排序：
-          // 即便本地旧配置曾将其设为关闭，也强制启用，满足“直接点表头排序”的明确需求。
-          const FORCE_ENABLED_RESEARCH_IDS = [
-            'researchSignal', 'researchCagr', 'researchMdd', 'researchVol', 'researchSharpe', 'relatedSector'
-          ];
-          merged.forEach((r) => {
-            if (FORCE_ENABLED_RESEARCH_IDS.includes(r.id)) r.enabled = true;
-          });
-          nextState.sortRules = merged;
+          nextState.sortRules = mergeSortRulesWithDefaults(rulesFromSettings);
         }
       }
     } catch {
@@ -457,6 +475,18 @@ export const useStorageStore = create((set, get) => ({
 
   setSortRules: (nextRules) => {
     const val = isFunction(nextRules) ? nextRules(get().sortRules) : nextRules;
+    set({ sortRules: val });
+    get()._persistSortSettings({ sortRules: val });
+  },
+
+  /**
+   * 应用云端同步下来的排序规则：与 DEFAULT_SORT_RULES 合并后再落地，
+   * 防止云端旧 localSortRules（缺 relatedSector/研究指标或将其禁用）
+   * 原样覆盖本地，导致右上角排序选择器丢失这些选项、表头点击排序被重置。
+   */
+  applyCloudSortRules: (cloudRules) => {
+    if (!isArray(cloudRules) || !cloudRules.length) return;
+    const val = mergeSortRulesWithDefaults(cloudRules);
     set({ sortRules: val });
     get()._persistSortSettings({ sortRules: val });
   },
