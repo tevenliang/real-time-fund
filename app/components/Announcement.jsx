@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageStore } from '../stores';
 
-const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v2.4.1';
+const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v2.4.2';
 
 export default function Announcement() {
   const [isVisible, setIsVisible] = useState(false);
@@ -109,8 +109,10 @@ export default function Announcement() {
                 paddingRight: '4px'
               }}
             >
-              <p>v2.4.1 版本更新内容：</p>
-              <p>1. 修复数据源1获取问题。</p>
+              <p>v2.4.2 版本更新内容：</p>
+              <p>1. 修复关联板块排序不生效的问题。</p>
+              <p>2. 修复云端同步可能清空/丢失基金板块字段的问题。</p>
+              <p>3. 页面右上角排序选择器与顶部"关联板块"按钮均可触发板块排序。</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
               <button

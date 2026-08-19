@@ -42,23 +42,34 @@ const mergeValuationFieldsByGztime = (localFund, cloudFund) => {
   if (!isPlainObject(cloudFund)) return cloudFund;
   if (!isPlainObject(localFund)) return cloudFund;
 
+  // 云端数据缺失板块字段时，保留本地板块字段（防止同步剥离 relatedSector）
+  const withLocalSectorFields = (base) => {
+    const out = { ...base };
+    if (isNil(out.relatedSector) && !isNil(localFund.relatedSector)) out.relatedSector = localFund.relatedSector;
+    if (isNil(out.relatedSectorUpdatedAt) && !isNil(localFund.relatedSectorUpdatedAt)) {
+      out.relatedSectorUpdatedAt = localFund.relatedSectorUpdatedAt;
+    }
+    if (isNil(out.sectorIds) && !isNil(localFund.sectorIds)) out.sectorIds = localFund.sectorIds;
+    return out;
+  };
+
   const localGzRaw = localFund.gztime;
   const cloudGzRaw = cloudFund.gztime;
 
-  if (!isString(localGzRaw) || !isString(cloudGzRaw)) return cloudFund;
+  if (!isString(localGzRaw) || !isString(cloudGzRaw)) return withLocalSectorFields(cloudFund);
 
   const localGz = toTz(localGzRaw);
   const cloudGz = toTz(cloudGzRaw);
-  if (!localGz?.isValid?.() || !cloudGz?.isValid?.()) return cloudFund;
+  if (!localGz?.isValid?.() || !cloudGz?.isValid?.()) return withLocalSectorFields(cloudFund);
 
-  if (!localGz.isAfter(cloudGz)) return cloudFund;
+  if (!localGz.isAfter(cloudGz)) return withLocalSectorFields(cloudFund);
 
   const patch = {};
   if (!isNil(localFund.gsz)) patch.gsz = localFund.gsz;
   if (!isNil(localFund.gszzl)) patch.gszzl = localFund.gszzl;
   if (!isNil(localFund.gztime)) patch.gztime = localFund.gztime;
 
-  return { ...cloudFund, ...patch };
+  return withLocalSectorFields({ ...cloudFund, ...patch });
 };
 
 /**
