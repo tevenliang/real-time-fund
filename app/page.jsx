@@ -4101,7 +4101,24 @@ export default function HomePage() {
             };
             setCustomSettings(mergedSettings);
             if (mergedSettings.localSortRules && isArray(mergedSettings.localSortRules)) {
-              setSortRules(mergedSettings.localSortRules);
+              // 云端拉回的 sortRules 可能是旧版本（不含新增的规则如 relatedSector）。
+              // 与 storageStore 的合并逻辑一致：保留云端的 enabled 状态，
+              // 但追加新增规则，并强制启用研究类指标列 + 关联板块列。
+              const defaultMap = new Map(DEFAULT_SORT_RULES.map((r) => [r.id, r]));
+              const mergedSort = [];
+              for (const stored of mergedSettings.localSortRules) {
+                const base = defaultMap.get(stored.id);
+                if (!base) continue;
+                mergedSort.push({ ...base, enabled: typeof stored.enabled === 'boolean' ? stored.enabled : base.enabled });
+              }
+              DEFAULT_SORT_RULES.forEach((rule) => {
+                if (!mergedSort.some((r) => r.id === rule.id)) mergedSort.push(rule);
+              });
+              ['researchSignal','researchCagr','researchMdd','researchVol','researchSharpe','relatedSector'].forEach((id) => {
+                const r = mergedSort.find((x) => x.id === id);
+                if (r) r.enabled = true;
+              });
+              setSortRules(mergedSort);
             }
             if (mergedSettings.localSortDisplayMode && SORT_DISPLAY_MODES.has(mergedSettings.localSortDisplayMode)) {
               setPcSortDisplayMode(mergedSettings.localSortDisplayMode);
