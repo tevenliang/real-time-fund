@@ -673,6 +673,11 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
 
       const payload = collectLocalPayload(dirtyKeys.size > 0 ? dirtyKeys : null);
 
+      // 保护：如果 funds 为空数组，不同步到云端（防止本地数据异常导致云端被清空）
+      if (payload && Array.isArray(payload.funds) && payload.funds.length === 0) {
+        delete payload.funds;
+      }
+
       dirtyKeysRef.current.clear();
 
       const doSync = syncUserConfigRef.current;
@@ -944,7 +949,12 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
         const cloudFunds = isArray(cloudData.funds)
           ? dedupeByCode(cloudData.funds.map(stripLegacyTagsFromFundObject))
           : [];
-        const nextFunds = cloudFunds.map((cf) =>
+        // 保护本地基金：云端 funds 为空但本地有基金时，保留本地数据
+        // （防止云端数据异常/损坏导致本地基金被清空）
+        const effectiveFunds = cloudFunds.length > 0
+          ? cloudFunds
+          : localFundsForMerge.filter((f) => f && f.code != null);
+        const nextFunds = effectiveFunds.map((cf) =>
           mergeValuationFieldsByGztime(localFundByCode.get(String(cf?.code)), cf)
         );
         useStorageStore.getState().setFunds(nextFunds);
