@@ -4119,6 +4119,19 @@ export default function HomePage() {
                 if (r) r.enabled = true;
               });
               setSortRules(mergedSort);
+            } else {
+              // 云端没有 localSortRules（null），但已登录用户有可能拿到旧配置。
+              // 兜底：在所有路径都强制启用 relatedSector（即便云端是 null，
+              // 本地 useStorageStore 的 DEFAULT 也会包含，只是 ensure 一遍）。
+              const cur = useStorageStore.getState().sortRules;
+              const patched = cur.map((r) => (r && r.id === 'relatedSector' ? { ...r, enabled: true } : r));
+              if (patched.some((r) => r.id === 'relatedSector') && patched.find((r) => r.id === 'relatedSector').enabled) {
+                // already has relatedSector & enabled
+              } else if (!patched.some((r) => r.id === 'relatedSector')) {
+                const def = DEFAULT_SORT_RULES.find((r) => r.id === 'relatedSector');
+                if (def) patched.push({ ...def, enabled: true });
+              }
+              useStorageStore.setState({ sortRules: patched });
             }
             if (mergedSettings.localSortDisplayMode && SORT_DISPLAY_MODES.has(mergedSettings.localSortDisplayMode)) {
               setPcSortDisplayMode(mergedSettings.localSortDisplayMode);
