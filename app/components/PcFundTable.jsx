@@ -1319,7 +1319,7 @@ const PcFundTable = memo(function PcFundTable({
   const withRelatedSectorFund = useCallback(
     (row) => {
       if (!row || !row.code) return row;
-      const rawValue = relatedSectorByCode?.[row.code] ?? relatedSectorCacheRef.current.get(row.code) ?? '';
+      const rawValue = relatedSectorByCode?.[row.code] ?? relatedSectorCacheRef.current.get(row.code) ?? row.rawFund?.relatedSector ?? '';
       const relatedSector = rawValue != null ? String(rawValue).trim() : '';
       const quote = relatedSector ? sectorQuoteByLabel?.[relatedSector] : null;
       const quoteName = quote?.name != null ? String(quote.name).trim() : '';
