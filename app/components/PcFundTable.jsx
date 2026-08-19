@@ -102,12 +102,7 @@ const PC_COLUMNS_DEFAULT_HIDDEN_IF_PERSONALIZED = new Set([
   'holdingCost',
   'costNav',
   'sinceAddedChangePercent',
-  'holdingRatio',
-  'researchSignal',
-  'researchCagr',
-  'researchMdd',
-  'researchVol',
-  'researchSharpe'
+  'holdingRatio'
 ]);
 
 const COLUMN_HEADERS = {
