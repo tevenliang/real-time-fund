@@ -1317,65 +1317,66 @@ export async function fetchFundBestSource(fundCode) {
     return cached;
   }
 
-  // 并行：获取历史最优源 + 各源实时数据
-  const [rpcResult, v1s, v2s, v3s] = await Promise.allSettled([
-    supabase.rpc('get_fund_best_source', { p_fund_code: code }),
+  // —— QDII 基金：强制走 Supabase gs_qdii（数据源 4）——
+  // 天天基金 fundgz / 新浪估算对 QDII 普遍失效（净值更新滞后、口径不同），
+  // 因此 QDII 直接用 gs_qdii 表数据，有数据即用，不再与其它源比较。
+  let isQdii = false;
+  try {
+    isQdii = await isQdiiFund(code);
+  } catch {
+    isQdii = false;
+  }
+  if (isQdii) {
+    try {
+      const v4 = await fetchFundValuationBySource(code, 4).catch(() => null);
+      if (v4 && v4.gszzl != null) {
+        qc.setQueryData(cacheKey, 4, { staleTime: 60 * 60 * 1000 });
+        return 4;
+      }
+    } catch {
+      /* gs_qdii 无数据，继续走标准源兜底 */
+    }
+  }
+
+  // —— 非 QDII：并行获取各标准源（1 天天基金 / 2 新浪ds2 / 3 新浪ds3）实时估值 ——
+  const [v1s, v2s, v3s] = await Promise.allSettled([
     fetchFundValuationBySource(code, 1).catch(() => null),
     fetchFundValuationBySource(code, 2).catch(() => null),
     fetchFundValuationBySource(code, 3).catch(() => null),
   ]);
-
-  // 拆包 Promise.allSettled 结果（[{status,value}]} → value）
   const v1 = v1s.status === 'fulfilled' ? v1s.value : null;
   const v2 = v2s.status === 'fulfilled' ? v2s.value : null;
   const v3 = v3s.status === 'fulfilled' ? v3s.value : null;
   const vals = { 1: v1, 2: v2, 3: v3 };
   const hasData = (srcId) => vals[srcId]?.gszzl != null;
 
-  // 优先用历史最优源（如果有实时数据）
-  if (rpcResult.status === 'fulfilled') {
-    const { data, error } = rpcResult.value;
-    const sourceName = Array.isArray(data) ? data[0]?.source : data?.source;
-    if (!error && sourceName) {
+  // 在所有“有实时数据”的源中，按口径精度优先级选择：
+  //   新浪 ds3 > 新浪 ds2 > 天天基金 fundgz
+  // 注：get_fund_best_source 当前对所有基金返回常量 fundgz（历史精度表无真实数据），
+  // 因此不能盲信 RPC 的历史最优（会永远把源1短路为首选）。这里改为“优先选有数据且
+  // 口径更细的新浪源”，既能修复“其它基金也被迫用源1”的问题，又不会因某个源缺数据而
+  // 显示“失效”（只要有任一源有数据就会被选中）。
+  const accuracyOrder = [3, 2, 1];
+  for (const id of accuracyOrder) {
+    if (hasData(id)) {
+      qc.setQueryData(cacheKey, id, { staleTime: 60 * 60 * 1000 });
+      return id;
+    }
+  }
+
+  // 所有标准源都无实时数据：退回 RPC 历史最优源（前端据此显示“数据暂不可用”），无则 null
+  try {
+    const { data, error } = await supabase.rpc('get_fund_best_source', { p_fund_code: code });
+    if (!error) {
+      const sourceName = Array.isArray(data) ? data[0]?.source : data?.source;
       const id = SOURCE_NAME_TO_ID[sourceName] ?? null;
       if (id != null) {
-        // 如果最优源此刻有数据，直接用
-        if (hasData(id)) {
-          qc.setQueryData(cacheKey, id, { staleTime: 60 * 60 * 1000 });
-          return id;
-        }
-        // 最优源没实时数据：优先 sina_ds3 > sina_ds2（新浪普遍更准）
-        if (hasData(3)) {
-          qc.setQueryData(cacheKey, 3, { staleTime: 60 * 60 * 1000 });
-          return 3;
-        }
-        if (hasData(2)) {
-          qc.setQueryData(cacheKey, 2, { staleTime: 60 * 60 * 1000 });
-          return 2;
-        }
-        if (hasData(1)) {
-          qc.setQueryData(cacheKey, 1, { staleTime: 60 * 60 * 1000 });
-          return 1;
-        }
-        // 所有源都没数据，返回历史最优（前端会显示数据暂不可用）
         qc.setQueryData(cacheKey, id, { staleTime: 60 * 60 * 1000 });
         return id;
       }
     }
-  }
-
-  // RPC失败时：找任意一个有实时数据的源（优先 3 > 2 > 1）
-  if (hasData(3)) {
-    qc.setQueryData(cacheKey, 3, { staleTime: 60 * 60 * 1000 });
-    return 3;
-  }
-  if (hasData(2)) {
-    qc.setQueryData(cacheKey, 2, { staleTime: 60 * 60 * 1000 });
-    return 2;
-  }
-  if (hasData(1)) {
-    qc.setQueryData(cacheKey, 1, { staleTime: 60 * 60 * 1000 });
-    return 1;
+  } catch {
+    /* ignore */
   }
   return null;
 }

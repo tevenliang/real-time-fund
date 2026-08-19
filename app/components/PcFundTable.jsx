@@ -2892,7 +2892,12 @@ const PcFundTable = memo(function PcFundTable({
         period1m: 'last1Month',
         period3m: 'last3Months',
         period6m: 'last6Months',
-        period1y: 'last1Year'
+        period1y: 'last1Year',
+        researchSignal: 'researchSignal',
+        researchCagr: 'researchCagr',
+        researchMdd: 'researchMdd',
+        researchVol: 'researchVol',
+        researchSharpe: 'researchSharpe'
       };
       const sortKey = sortMap[columnId];
       const isSorted = !!sortBy && sortKey === sortBy;

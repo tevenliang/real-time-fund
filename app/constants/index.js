@@ -47,11 +47,11 @@ export const DEFAULT_SORT_RULES = [
   { id: 'sinceAddedChangePercent', label: '自添加来', enabled: false },
   { id: 'consecutiveTrend', label: '连涨跌天数', enabled: false },
   { id: 'tags', label: '基金标签', enabled: false },
-  { id: 'researchSignal', label: '波段信号', enabled: false },
-  { id: 'researchCagr', label: '年化收益', enabled: false },
-  { id: 'researchMdd', label: '最大回撤', enabled: false },
-  { id: 'researchVol', label: '年化波动', enabled: false },
-  { id: 'researchSharpe', label: '夏普比率', enabled: false },
+  { id: 'researchSignal', label: '波段信号', enabled: true },
+  { id: 'researchCagr', label: '年化收益', enabled: true },
+  { id: 'researchMdd', label: '最大回撤', enabled: true },
+  { id: 'researchVol', label: '年化波动', enabled: true },
+  { id: 'researchSharpe', label: '夏普比率', enabled: true },
   { id: 'name', label: '基金名称', alias: '名称', enabled: true }
 ];
 
