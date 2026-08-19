@@ -1478,6 +1478,7 @@ export default function HomePage() {
       return {
         rawFund: f,
         code: f.code,
+        relatedSector: relatedSectorByCode?.[f.code] ?? f.relatedSector ?? '',
         fundName: f.name,
         fundTags,
         isHoldingLinked: !!isHoldingLinked,
@@ -1539,7 +1540,8 @@ export default function HomePage() {
     summaryHoldingSourceGroupByCode,
     linkedHoldingsForAllFav,
     fundTagListsByCode,
-    groupTotalHoldingAmount
+    groupTotalHoldingAmount,
+    relatedSectorByCode
   ]);
 
   // 自动滚动选中 Tab 到可视区域

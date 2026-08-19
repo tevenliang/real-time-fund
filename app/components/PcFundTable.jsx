@@ -2915,6 +2915,8 @@ const PcFundTable = memo(function PcFundTable({
       const sortKey = sortMap[columnId];
       const isSorted = !!sortBy && sortKey === sortBy;
       let isSortEnabled = !!sortKey && (sortRules || []).some((rule) => rule?.id === sortKey && !!rule?.enabled);
+      // 关联板块列始终可排序（数据已就绪，不依赖用户排序规则配置/云端同步覆盖）
+      if (sortKey === 'relatedSector') isSortEnabled = true;
 
       // 选择默认排序时，隐藏基金名称表头的排序和箭头
       if (sortBy === 'default' && sortKey === 'name') {
