@@ -1202,7 +1202,10 @@ export default function HomePage() {
         return sortOrder === 'asc' ? va - vb : vb - va;
       }
       if (sortBy === 'relatedSector') {
-        const get = (f) => relatedSectorByCode?.[f.code] ?? f.relatedSector ?? '';
+        const get = (f) => {
+          const v = relatedSectorByCode?.[f.code];
+          return v != null && String(v).trim() !== '' ? v : (f.relatedSector ?? '');
+        };
         const va = String(get(a) || '').trim();
         const vb = String(get(b) || '').trim();
         if (!va && !vb) return 0;
@@ -1478,7 +1481,9 @@ export default function HomePage() {
       return {
         rawFund: f,
         code: f.code,
-        relatedSector: relatedSectorByCode?.[f.code] ?? f.relatedSector ?? '',
+        relatedSector: (relatedSectorByCode?.[f.code] != null && String(relatedSectorByCode[f.code]).trim() !== '')
+          ? relatedSectorByCode[f.code]
+          : (f.relatedSector ?? ''),
         fundName: f.name,
         fundTags,
         isHoldingLinked: !!isHoldingLinked,
