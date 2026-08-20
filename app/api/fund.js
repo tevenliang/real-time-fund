@@ -2556,14 +2556,38 @@ function sinaJsonpFetch(code, range) {
 }
 
 export const fetchFundValuationTrend = async (code, range = '3m') => {
-  // Use Sina JSONP directly in browser — no Edge Function needed
+  // Computes daily returns from pingzhongdata equityReturn (historical actual returns).
+  // Sina JSONP blocked by browser CORS; Edge Function needs higher Supabase permission.
+  // Shows 'fundgz' source line as the best available historical view.
   if (typeof window === 'undefined') return [];
   try {
-    return await sinaJsonpFetch(code, range);
+    const RANGE_DAYS = { '1m': 31, '3m': 93, '6m': 183, '1y': 365, '3y': 1095, 'all': 9999 };
+    const dayCount = RANGE_DAYS[range] ?? 93;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - dayCount);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+    const pz = await fetchFundPingzhongdata(code, { cacheTime: 30 * 60 * 1000 });
+    const trend = pz?.Data_netWorthTrend;
+    if (!Array.isArray(trend) || trend.length < 2) return [];
+
+    const result = [];
+    for (let i = 1; i < trend.length; i++) {
+      const item = trend[i];
+      if (!item) continue;
+      const date = dayjs(item.x).tz(TZ).format('YYYY-MM-DD');
+      if (date < cutoffStr) continue;
+      const equityReturn = Number(item.equityReturn);
+      if (Number.isFinite(equityReturn)) {
+        result.push({ gztime: date, gszzl: equityReturn, source: 'fundgz' });
+      }
+    }
+    result.sort((a, b) => a.gztime < b.gztime ? -1 : 1);
+    return result;
   } catch (e) {
     return [];
   }
-};
+};;
 
 export const parseFundTextWithLLM = async (text) => {
   if (!text) return null;
