@@ -5305,3 +5305,6 @@ html::-webkit-scrollbar-thumb:active,
     backdrop-filter: blur(2px) !important;
   }
 }
+
+/* tooltip 无动画：hover 时不闪 */
+.trend-tooltip-fade { transition: opacity 0.05s ease; }
