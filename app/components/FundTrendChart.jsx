@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchFundHistory } from '../api/fund';
 import * as qk from '../lib/query-keys';
 import { getChartAxisAvoidRects, getChartTooltipPosition } from '../lib/chartTooltipPosition';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ChevronIcon } from './Icons';
 import {
   Chart as ChartJS,
@@ -73,12 +73,14 @@ export default function FundTrendChart({
   const clearActiveIndexRef = useRef(null);
   const [hiddenGrandSeries, setHiddenGrandSeries] = useState(() => new Set());
   const [activeIndex, setActiveIndex] = useState(null);
-  const [tooltipInfo, setTooltipInfo] = useState(null);
+const [tooltipVisible, setTooltipVisible] = useState(false);
+  const tooltipDataRef = useRef(null);
+  const lastTooltipUpdateRef = useRef(0);
 
   useEffect(() => {
     clearActiveIndexRef.current = () => {
       setActiveIndex(null);
-      setTooltipInfo(null);
+      setTooltipVisible(false);
     };
   });
 
@@ -282,58 +284,30 @@ export default function FundTrendChart({
           intersect: false,
           external: (context) => {
             const { chart, tooltip } = context;
-            if (tooltip.opacity === 0) {
-              setTooltipInfo(null);
-              return;
+            if (tooltip.opacity === 0) { setTooltipVisible(false); return; }
+            const now = Date.now();
+            if (now - lastTooltipUpdateRef.current < 80) return;
+            lastTooltipUpdateRef.current = now;
+            const dataPoints = tooltip.dataPoints;
+            if (!dataPoints || dataPoints.length === 0) return;
+            const mainPt = dataPoints.find((p) => p.datasetIndex === 0);
+            if (!mainPt) return;
+            const dataIdx = mainPt.dataIndex;
+            const rawVal = data[dataIdx]?.value;
+            let dailyChange = data[dataIdx]?.equityReturn;
+            if (dailyChange == null && dataIdx > 0) {
+              const currUnit = data[dataIdx]?.unitNetValue ?? data[dataIdx]?.value;
+              const prevUnit = data[dataIdx-1]?.unitNetValue ?? data[dataIdx-1]?.value;
+              if (currUnit != null && prevUnit != null && prevUnit !== 0) { dailyChange = (currUnit / prevUnit - 1) * 100; }
             }
-            if (tooltip.body) {
-              const dataPoints = tooltip.dataPoints;
-              if (dataPoints && dataPoints.length > 0) {
-                const mainPt = dataPoints.find((p) => p.datasetIndex === 0);
-                if (mainPt) {
-                  const dataIdx = mainPt.dataIndex;
-                  const rawVal = data[dataIdx]?.value;
-                  const dailyChange = data[dataIdx]?.equityReturn;
-                  const dateStr = data[dataIdx]?.date;
-                  const x = mainPt.element.x;
-                  const y = mainPt.element.y;
-                  const percentageValue = chart.data.datasets?.[0]?.data?.[dataIdx];
-                  const yLabel = `${isNumber(percentageValue) ? percentageValue.toFixed(2) : percentageValue}%`;
-                  const position = getChartTooltipPosition({
-                    anchorX: x,
-                    anchorY: y,
-                    tooltipWidth: TOOLTIP_SIZE.width,
-                    tooltipHeight: TOOLTIP_SIZE.height,
-                    chartWidth: chart.width,
-                    chartHeight: chart.height,
-                    chartArea: chart.chartArea,
-                    avoidRects: getChartAxisAvoidRects({
-                      chart,
-                      anchorX: x,
-                      anchorY: y,
-                      xLabel: dateStr,
-                      yLabel
-                    })
-                  });
-
-                  if (!position) {
-                    setTooltipInfo(null);
-                    return;
-                  }
-
-                  setTooltipInfo({
-                    x: position.left,
-                    y: position.top,
-                    date: dateStr,
-                    unitNetValue: data[dataIdx]?.unitNetValue,
-                    accumulatedNetValue: data[dataIdx]?.accumulatedNetValue ?? rawVal,
-                    dailyChange,
-                    cumulativeChange: percentageData[dataIdx],
-                    color: mainPt.dataset.borderColor
-                  });
-                }
-              }
-            }
+            const dateStr = data[dataIdx]?.date;
+            const x = mainPt.element.x; const y = mainPt.element.y;
+            const percentageValue = percentageData[dataIdx];
+            const yLabel = (isNumber(percentageValue) ? percentageValue.toFixed(2) : percentageValue) + '%';
+            const position = getChartTooltipPosition({ anchorX: x, anchorY: y, tooltipWidth: TOOLTIP_SIZE.width, tooltipHeight: TOOLTIP_SIZE.height, chartWidth: chart.width, chartHeight: chart.height, chartArea: chart.chartArea, avoidRects: getChartAxisAvoidRects({ chart, anchorX: x, anchorY: y, xLabel: dateStr, yLabel }) });
+            if (!position) { setTooltipVisible(false); return; }
+            tooltipDataRef.current = { x: position.left, y: position.top, date: dateStr, unitNetValue: data[dataIdx]?.unitNetValue, accumulatedNetValue: data[dataIdx]?.accumulatedNetValue ?? rawVal, dailyChange, cumulativeChange: percentageData[dataIdx], color: mainPt.dataset.borderColor };
+            setTooltipVisible(true);
           }
         }
       },
@@ -644,18 +618,15 @@ export default function FundTrendChart({
   const lastIndex = data.length > 0 ? data.length - 1 : null;
   const currentIndex = activeIndex != null && activeIndex < data.length ? activeIndex : lastIndex;
 
+  const tooltipInfo = tooltipVisible ? tooltipDataRef.current : null;
   const renderTrendTooltip = (className) =>
     tooltipInfo ? (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }}
-        className={`glass trend-tooltip ${className}`}
+      <div
+        className={`glass trend-tooltip ${className} trend-tooltip-fade`}
         style={{
           position: 'absolute',
-          left: tooltipInfo.x,
-          top: tooltipInfo.y,
+          left: tooltipInfo?.x,
+          top: tooltipInfo?.y,
           pointerEvents: 'none',
           padding: '12px',
           borderRadius: '8px',
@@ -669,62 +640,12 @@ export default function FundTrendChart({
           color: 'var(--text-primary)'
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-          <span style={{ color: 'var(--muted, #888)' }}>单位净值</span>
-          <span style={{ fontFamily: 'Menlo, Monaco, monospace', fontWeight: '500' }}>
-            {tooltipInfo.unitNetValue != null ? tooltipInfo.unitNetValue.toFixed(4) : '--'}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-          <span style={{ color: 'var(--muted, #888)' }}>累计净值</span>
-          <span style={{ fontFamily: 'Menlo, Monaco, monospace', fontWeight: '500' }}>
-            {tooltipInfo.accumulatedNetValue != null ? tooltipInfo.accumulatedNetValue.toFixed(4) : '--'}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-          <span style={{ color: 'var(--muted, #888)' }}>日涨幅</span>
-          <span
-            style={{
-              fontFamily: 'Menlo, Monaco, monospace',
-              fontWeight: '500',
-              color:
-                tooltipInfo.dailyChange > 0
-                  ? 'var(--danger)'
-                  : tooltipInfo.dailyChange < 0
-                    ? 'var(--success)'
-                    : 'inherit'
-            }}
-          >
-            {isNumber(tooltipInfo.dailyChange) && Number.isFinite(tooltipInfo.dailyChange)
-              ? `${tooltipInfo.dailyChange > 0 ? '+' : ''}${tooltipInfo.dailyChange.toFixed(2)}%`
-              : '--'}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-          <span style={{ color: 'var(--muted, #888)' }}>累计涨跌幅</span>
-          <span
-            style={{
-              fontFamily: 'Menlo, Monaco, monospace',
-              fontWeight: '500',
-              color:
-                tooltipInfo.cumulativeChange > 0
-                  ? 'var(--danger)'
-                  : tooltipInfo.cumulativeChange < 0
-                    ? 'var(--success)'
-                    : 'inherit'
-            }}
-          >
-            {isNumber(tooltipInfo.cumulativeChange) && Number.isFinite(tooltipInfo.cumulativeChange)
-              ? `${tooltipInfo.cumulativeChange > 0 ? '+' : ''}${tooltipInfo.cumulativeChange.toFixed(2)}%`
-              : '--'}
-          </span>
-        </div>
-      </motion.div>
+      </div>
     ) : null;
 
   const chartBlock = (
     <div className="trend-chart-panel" style={{ position: 'relative' }}>
-      <AnimatePresence>{renderTrendTooltip('trend-tooltip-mobile')}</AnimatePresence>
+        {renderTrendTooltip('trend-tooltip-mobile')}
 
       {/* 顶部图示：说明不同颜色/标记代表的含义 */}
       <div className="row" style={{ marginBottom: 8, gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: 11 }}>
@@ -895,7 +816,7 @@ export default function FundTrendChart({
 
         {data.length > 0 && <Line ref={chartRef} data={chartData} options={options} plugins={plugins} />}
 
-        <AnimatePresence>{renderTrendTooltip('trend-tooltip-desktop')}</AnimatePresence>
+        {renderTrendTooltip('trend-tooltip-desktop')}
       </div>
 
       <div className="trend-range-bar">
