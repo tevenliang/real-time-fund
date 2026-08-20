@@ -108,9 +108,11 @@ export default function FundTrendChart({
 
   const change = useMemo(() => {
     if (!data.length) return 0;
-    const first = data[0].value;
-    const last = data[data.length - 1].value;
-    return ((last - first) / first) * 100;
+    // 优先用 accumulatedNetValue（累计净值），fallback 到 data.value
+    const first = data[0].accumulatedNetValue ?? data[0].value;
+    const last = data[data.length - 1].accumulatedNetValue ?? data[data.length - 1].value;
+    // accumulatedNetValue / value 已是累计收益率（%），直接相减得区间总涨跌幅
+    return last - first;
   }, [data]);
 
   // Red for up, Green for down (CN market style)，随主题使用 CSS 变量
@@ -119,10 +121,13 @@ export default function FundTrendChart({
   const lineColor = change >= 0 ? upColor : downColor;
   const primaryColor = chartColors.primary;
 
+  // Data_netWorthTrend / Data_ACWorthTrend 里的 value 已是累计收益率（%），
+  // 不能当净值再做一次 (v-first)/first。直接用 accumulatedNetValue（真实累计净值）
+  // 作为 Y 轴数据；以区间首日为 0 基准显示相对涨跌幅
   const percentageData = useMemo(() => {
     if (!data.length) return [];
-    const firstValue = data[0].value ?? 1;
-    return data.map((d) => ((d.value - firstValue) / firstValue) * 100);
+    const firstValue = data[0].accumulatedNetValue ?? data[0].value;
+    return data.map((d) => (d.accumulatedNetValue ?? d.value) - firstValue);
   }, [data]);
 
   const chartData = useMemo(() => {
