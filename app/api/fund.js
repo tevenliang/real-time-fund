@@ -2505,18 +2505,64 @@ export const fetchFundHistory = async (code, range = '1m', options = {}) => {
   return [];
 };
 
+// ─── Helper: Sina JSONP for fund estimate data ───────────────────────────────
+function sinaJsonpFetch(code, range) {
+  return new Promise(function(resolve, reject) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') { resolve([]); return; }
+    var cbName = 'jsonp_vt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    var timeoutId = null; var resolved = false;
+    function cleanup() {
+      if (timeoutId) clearTimeout(timeoutId);
+      try { delete window[cbName]; } catch(e) {}
+      var el = document.getElementById(cbName);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+    function resolveOnce(result) { if (resolved) return; resolved = true; cleanup(); resolve(result); }
+    timeoutId = setTimeout(function() { resolveOnce([]); }, 10000);
+    window[cbName] = function(response) {
+      try {
+        var raw = response && response.result && response.result.data && response.result.data.networth;
+        if (!raw || !Array.isArray(raw) || raw.length === 0) { resolveOnce([]); return; }
+        var byDate = {};
+        raw.forEach(function(item) { var date = item.pre_date; if (date) byDate[date] = item; });
+        var dayCount = 30;
+        if (range === '3m') dayCount = 90;
+        else if (range === '6m') dayCount = 180;
+        else if (range === '1y') dayCount = 365;
+        else if (range === '3y') dayCount = 1095;
+        else if (range === 'all') dayCount = 9999;
+        var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - dayCount);
+        var cutoffStr = cutoff.toISOString().slice(0, 10);
+        var result = [];
+        Object.keys(byDate).forEach(function(date) {
+          if (date < cutoffStr) return;
+          var item = byDate[date];
+          var gs3 = parseFloat(item.growthrate);
+          var gs2 = parseFloat(item.growthrate2);
+          if (!isNaN(gs3)) result.push({ gztime: date, gszzl: gs3, source: 'sina_ds3' });
+          if (!isNaN(gs2)) result.push({ gztime: date, gszzl: gs2, source: 'sina_ds2' });
+        });
+        result.sort(function(a, b) { return a.gztime < b.gztime ? -1 : 1; });
+        resolveOnce(result);
+      } catch (e) { resolveOnce([]); }
+    };
+    var url = 'https://stock.finance.sina.com.cn/fundInfo/api/openapi.php/FdFundService.getEstimateNetworthPic?symbol=' + encodeURIComponent(code) + '&callback=' + encodeURIComponent(cbName);
+    var script = document.createElement('script');
+    script.id = cbName;
+    script.src = url;
+    script.onerror = function() { resolveOnce([]); };
+    document.head.appendChild(script);
+  });
+}
+
 export const fetchFundValuationTrend = async (code, range = '3m') => {
-  if (!isSupabaseConfigured) return [];
-  if (!supabase?.functions?.invoke) return [];
-
-  const { data, error } = await withRetry(() =>
-    supabase.functions.invoke('get-fund-valuation-trend', {
-      body: { fund_code: code, range }
-    })
-  );
-
-  if (error || !data || data.error) return [];
-  return isArray(data.data) ? data.data : [];
+  // Use Sina JSONP directly in browser — no Edge Function needed
+  if (typeof window === 'undefined') return [];
+  try {
+    return await sinaJsonpFetch(code, range);
+  } catch (e) {
+    return [];
+  }
 };
 
 export const parseFundTextWithLLM = async (text) => {

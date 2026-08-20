@@ -1,0 +1,172 @@
+From a9de2d78f083661223d8c8a729d869a462193906 Mon Sep 17 00:00:00 2001
+From: Javis <javis@workbuddy.local>
+Date: Thu, 20 Aug 2026 03:38:56 +0800
+Subject: [PATCH] =?UTF-8?q?fix(v2.4.3):=20=E4=BA=91=E7=AB=AF=E6=97=A7?=
+ =?UTF-8?q?=E6=8E=92=E5=BA=8F=E8=A7=84=E5=88=99=E5=90=88=E5=B9=B6=E5=90=8E?=
+ =?UTF-8?q?=E5=86=8D=E5=BA=94=E7=94=A8=EF=BC=8C=E9=98=B2=E6=AD=A2=E5=85=B3?=
+ =?UTF-8?q?=E8=81=94=E6=9D=BF=E5=9D=97=E8=A2=AB=E7=A6=81=E7=94=A8/?=
+ =?UTF-8?q?=E4=B8=A2=E5=A4=B1?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- storageStore: 抽取 mergeSortRulesWithDefaults 公共函数（补齐缺失规则 + 强制启用研究指标/关联板块）
+- 新增 applyCloudSortRules action：云端 localSortRules 与 DEFAULT_SORT_RULES 合并后再落地并持久化
+- useSyncManager.applyCloudConfig: 云端排序规则改走 applyCloudSortRules，不再原样覆盖
+- 修复链路：云端旧配置覆盖 -> relatedSector 缺失/禁用 -> 右上角选择器不显示 + page.jsx 重置 effect 把表头点击的 sortBy 拉回
+- Announcement: v2.4.3 版本公告
+---
+ app/components/Announcement.jsx | 10 ++---
+ app/hooks/useSyncManager.js     |  4 +-
+ app/stores/storageStore.js      | 78 +++++++++++++++++++++++----------
+ 3 files changed, 62 insertions(+), 30 deletions(-)
+
+diff --git a/app/components/Announcement.jsx b/app/components/Announcement.jsx
+index b05cee7..79a9fa1 100644
+--- a/app/components/Announcement.jsx
++++ b/app/components/Announcement.jsx
+@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
+ import { motion, AnimatePresence } from 'framer-motion';
+ import { storageStore } from '../stores';
+ 
+-const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v2.4.2';
++const ANNOUNCEMENT_KEY = 'hasClosedAnnouncement_v2.4.3';
+ 
+ export default function Announcement() {
+   const [isVisible, setIsVisible] = useState(false);
+@@ -109,10 +109,10 @@ export default function Announcement() {
+                 paddingRight: '4px'
+               }}
+             >
+-              <p>v2.4.2 版本更新内容：</p>
+-              <p>1. 修复关联板块排序不生效的问题。</p>
+-              <p>2. 修复云端同步可能清空/丢失基金板块字段的问题。</p>
+-              <p>3. 页面右上角排序选择器与顶部"关联板块"按钮均可触发板块排序。</p>
++              <p>v2.4.3 版本更新内容：</p>
++              <p>1. 修复云端旧排序配置覆盖本地，导致右上角排序选择器不出现“关联板块”的问题。</p>
++              <p>2. 修复点击表头“关联板块”排序被自动重置的问题。</p>
++              <p>3. 云端同步的排序规则现会与最新默认规则合并后再生效。</p>
+             </div>
+             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+               <button
+diff --git a/app/hooks/useSyncManager.js b/app/hooks/useSyncManager.js
+index 856bac7..76e4f7b 100644
+--- a/app/hooks/useSyncManager.js
++++ b/app/hooks/useSyncManager.js
+@@ -1200,7 +1200,9 @@ export function useSyncManager({ showToast, refreshAllRef, setTempSeconds, setFu
+             const merged = { ...cloudData.customSettings };
+             useStorageStore.getState().setCustomSettings(merged);
+             if (merged.localSortRules && isArray(merged.localSortRules)) {
+-              useStorageStore.getState().setSortRules(merged.localSortRules);
++              // 云端旧排序规则不能原样覆盖：需与 DEFAULT_SORT_RULES 合并并
++              // 强制启用研究指标/关联板块，否则右上角选择器会丢失这些选项
++              useStorageStore.getState().applyCloudSortRules(merged.localSortRules);
+             }
+             if (isString(merged.localSortDisplayMode) && SORT_DISPLAY_MODES.has(merged.localSortDisplayMode)) {
+               useStorageStore.getState().setPcSortDisplayMode(merged.localSortDisplayMode);
+diff --git a/app/stores/storageStore.js b/app/stores/storageStore.js
+index fee92a9..1083b7c 100644
+--- a/app/stores/storageStore.js
++++ b/app/stores/storageStore.js
+@@ -129,6 +129,47 @@ const normalizeStorageValue = (key, value) => {
+ /**
+  * 管理 localStorage 数据的 Zustand Store
+  */
++/**
++ * 将存储/云端来源的排序规则与 DEFAULT_SORT_RULES 合并：
++ * - 补齐新增规则（旧数据缺失时按默认值追加）
++ * - 保留用户自定义 alias
++ * - 强制启用表头排序所需的规则（研究指标 + 关联板块）
++ * 供 initSort 与云端配置回放（applyCloudSortRules）共用，
++ * 避免云端旧 localSortRules 覆盖后这些规则被禁用/丢失。
++ */
++const FORCE_ENABLED_SORT_IDS = [
++  'researchSignal',
++  'researchCagr',
++  'researchMdd',
++  'researchVol',
++  'researchSharpe',
++  'relatedSector'
++];
++
++export const mergeSortRulesWithDefaults = (rulesFromSettings) => {
++  if (!isArray(rulesFromSettings) || !rulesFromSettings.length) {
++    return DEFAULT_SORT_RULES.map((r) => ({ ...r }));
++  }
++  const defaultMap = new Map(DEFAULT_SORT_RULES.map((r) => [r.id, r]));
++  const merged = [];
++  for (const stored of rulesFromSettings) {
++    const base = defaultMap.get(stored?.id);
++    if (!base) continue;
++    merged.push({
++      ...base,
++      enabled: isBoolean(stored.enabled) ? stored.enabled : base.enabled,
++      alias: isString(stored.alias) && stored.alias.trim() ? stored.alias.trim() : base.alias
++    });
++  }
++  DEFAULT_SORT_RULES.forEach((rule) => {
++    if (!merged.some((r) => r.id === rule.id)) merged.push({ ...rule });
++  });
++  merged.forEach((r) => {
++    if (FORCE_ENABLED_SORT_IDS.includes(r.id)) r.enabled = true;
++  });
++  return merged;
++};
++
+ export const useStorageStore = create((set, get) => ({
+   // 云端同步回调，由 Page 组件注入
+   onSync: null,
+@@ -312,30 +353,7 @@ export const useStorageStore = create((set, get) => ({
+         }
+ 
+         if (rulesFromSettings && rulesFromSettings.length) {
+-          const defaultMap = new Map(DEFAULT_SORT_RULES.map((r) => [r.id, r]));
+-          const merged = [];
+-          for (const stored of rulesFromSettings) {
+-            const base = defaultMap.get(stored.id);
+-            if (!base) continue;
+-            merged.push({
+-              ...base,
+-              enabled: isBoolean(stored.enabled) ? stored.enabled : base.enabled,
+-              alias: isString(stored.alias) && stored.alias.trim() ? stored.alias.trim() : base.alias
+-            });
+-          }
+-          // 追加新版本新增但本地未记录的规则
+-          DEFAULT_SORT_RULES.forEach((rule) => {
+-            if (!merged.some((r) => r.id === rule.id)) merged.push(rule);
+-          });
+-          // 研究类指标列（波段信号/年化收益/最大回撤/年化波动/夏普比率）默认开启表头点击排序：
+-          // 即便本地旧配置曾将其设为关闭，也强制启用，满足“直接点表头排序”的明确需求。
+-          const FORCE_ENABLED_RESEARCH_IDS = [
+-            'researchSignal', 'researchCagr', 'researchMdd', 'researchVol', 'researchSharpe', 'relatedSector'
+-          ];
+-          merged.forEach((r) => {
+-            if (FORCE_ENABLED_RESEARCH_IDS.includes(r.id)) r.enabled = true;
+-          });
+-          nextState.sortRules = merged;
++          nextState.sortRules = mergeSortRulesWithDefaults(rulesFromSettings);
+         }
+       }
+     } catch {
+@@ -461,6 +479,18 @@ export const useStorageStore = create((set, get) => ({
+     get()._persistSortSettings({ sortRules: val });
+   },
+ 
++  /**
++   * 应用云端同步下来的排序规则：与 DEFAULT_SORT_RULES 合并后再落地，
++   * 防止云端旧 localSortRules（缺 relatedSector/研究指标或将其禁用）
++   * 原样覆盖本地，导致右上角排序选择器丢失这些选项、表头点击排序被重置。
++   */
++  applyCloudSortRules: (cloudRules) => {
++    if (!isArray(cloudRules) || !cloudRules.length) return;
++    const val = mergeSortRulesWithDefaults(cloudRules);
++    set({ sortRules: val });
++    get()._persistSortSettings({ sortRules: val });
++  },
++
+   /**
+    * 将排序展示模式和规则合并写入 customSettings 持久化
+    * @param {object} patch - 可包含 pcSortDisplayMode / mobileSortDisplayMode / sortRules
+-- 
+2.43.0
+
