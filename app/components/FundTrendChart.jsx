@@ -109,10 +109,10 @@ export default function FundTrendChart({
   const change = useMemo(() => {
     if (!data.length) return 0;
     // 优先用 accumulatedNetValue（累计净值），fallback 到 data.value
-    const first = data[0].accumulatedNetValue ?? data[0].value;
-    const last = data[data.length - 1].accumulatedNetValue ?? data[data.length - 1].value;
-    // accumulatedNetValue / value 已是累计收益率（%），直接相减得区间总涨跌幅
-    return last - first;
+    const firstNetValue = data[0].accumulatedNetValue ?? data[0].value;
+    const lastNetValue = data[data.length - 1].accumulatedNetValue ?? data[data.length - 1].value;
+    // accumulatedNetValue / value 是累计净值（从1.0起），转%需 (last/first - 1)*100
+    return ((lastNetValue / firstNetValue) - 1) * 100;
   }, [data]);
 
   // Red for up, Green for down (CN market style)，随主题使用 CSS 变量
@@ -121,13 +121,16 @@ export default function FundTrendChart({
   const lineColor = change >= 0 ? upColor : downColor;
   const primaryColor = chartColors.primary;
 
-  // Data_netWorthTrend / Data_ACWorthTrend 里的 value 已是累计收益率（%），
-  // 不能当净值再做一次 (v-first)/first。直接用 accumulatedNetValue（真实累计净值）
-  // 作为 Y 轴数据；以区间首日为 0 基准显示相对涨跌幅
+  // Data_ACWorthTrend 的 y 是累计净值（从1.0起，如1.0→3.65对应265%累计收益）
+  // 正确公式：(当天净值 / 区间起点净值 - 1) * 100，得到以0%为起点的区间累计收益率曲线
   const percentageData = useMemo(() => {
     if (!data.length) return [];
-    const firstValue = data[0].accumulatedNetValue ?? data[0].value;
-    return data.map((d) => (d.accumulatedNetValue ?? d.value) - firstValue);
+    const firstNetValue = data[0].accumulatedNetValue ?? data[0].value;
+    if (firstNetValue === 0) return data.map(() => 0);
+    return data.map((d) => {
+      const netValue = d.accumulatedNetValue ?? d.value;
+      return (netValue / firstNetValue - 1) * 100;
+    });
   }, [data]);
 
   const chartData = useMemo(() => {
