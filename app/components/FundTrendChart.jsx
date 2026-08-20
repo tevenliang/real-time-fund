@@ -328,6 +328,7 @@ export default function FundTrendChart({
                     unitNetValue: data[dataIdx]?.unitNetValue,
                     accumulatedNetValue: data[dataIdx]?.accumulatedNetValue ?? rawVal,
                     dailyChange,
+                    cumulativeChange: percentageData[dataIdx],
                     color: mainPt.dataset.borderColor
                   });
                 }
@@ -696,6 +697,25 @@ export default function FundTrendChart({
           >
             {isNumber(tooltipInfo.dailyChange) && Number.isFinite(tooltipInfo.dailyChange)
               ? `${tooltipInfo.dailyChange > 0 ? '+' : ''}${tooltipInfo.dailyChange.toFixed(2)}%`
+              : '--'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+          <span style={{ color: 'var(--muted, #888)' }}>累计涨跌幅</span>
+          <span
+            style={{
+              fontFamily: 'Menlo, Monaco, monospace',
+              fontWeight: '500',
+              color:
+                tooltipInfo.cumulativeChange > 0
+                  ? 'var(--danger)'
+                  : tooltipInfo.cumulativeChange < 0
+                    ? 'var(--success)'
+                    : 'inherit'
+            }}
+          >
+            {isNumber(tooltipInfo.cumulativeChange) && Number.isFinite(tooltipInfo.cumulativeChange)
+              ? `${tooltipInfo.cumulativeChange > 0 ? '+' : ''}${tooltipInfo.cumulativeChange.toFixed(2)}%`
               : '--'}
           </span>
         </div>
