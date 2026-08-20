@@ -640,6 +640,25 @@ const [tooltipVisible, setTooltipVisible] = useState(false);
           color: 'var(--text-primary)'
         }}
       >
+        <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>{tooltipInfo.date}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', gap: '12px' }}>
+          <span style={{ color: 'var(--muted, #888)' }}>单位净值</span>
+          <span style={{ fontFamily: 'Menlo, Monaco, monospace', fontWeight: 500 }}>
+            {tooltipInfo.unitNetValue != null ? tooltipInfo.unitNetValue.toFixed(4) : '--'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', gap: '12px' }}>
+          <span style={{ color: 'var(--muted, #888)' }}>累计收益率</span>
+          <span style={{ fontFamily: 'Menlo, Monaco, monospace', fontWeight: 500, color: (tooltipInfo.cumulativeChange ?? 0) >= 0 ? upColor : downColor }}>
+            {tooltipInfo.cumulativeChange != null ? tooltipInfo.cumulativeChange.toFixed(2) + '%' : '--'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', gap: '12px' }}>
+          <span style={{ color: 'var(--muted, #888)' }}>日涨幅</span>
+          <span style={{ fontFamily: 'Menlo, Monaco, monospace', fontWeight: 500, color: (tooltipInfo.dailyChange ?? 0) >= 0 ? upColor : downColor }}>
+            {tooltipInfo.dailyChange != null ? tooltipInfo.dailyChange.toFixed(2) + '%' : '--'}
+          </span>
+        </div>
       </div>
     ) : null;
 
