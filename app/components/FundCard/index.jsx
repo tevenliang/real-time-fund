@@ -389,7 +389,7 @@ export default function Index({
   const isTrendExpanded = !collapsedTrends?.has(fundCode);
   const isValuationTrendExpanded = !collapsedValuationTrends?.has(fundCode);
   const isEarningsExpanded = !collapsedEarnings?.has(fundCode);
-  const showValuationTrend = Boolean(userId);
+  const showValuationTrend = false;
 
   return (
     <motion.div
