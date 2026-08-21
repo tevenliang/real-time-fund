@@ -2,34 +2,62 @@
  * 记录每次调用基金估值接口的结果，用于分时图。
  * 存储格式：{ [code]: { [dataSource]: [{ time, value, date }] } }
  * 规则：获取到最新日期的数据时，清掉所有老日期的数据，只保留当日分时点。
+ *
+ * 性能：使用内存缓存（memCache）避免每次 recordValuation 都全量 JSON.parse/stringify
+ * localStorage。写入仅在内存中增量进行，并通过防抖（persistTimer）批量落盘；
+ * 页面隐藏/卸载时强制落盘，避免数据丢失。
  */
 import { isArray, isPlainObject, isString } from 'lodash';
 import { storageStore } from '@/app/stores';
 
 const STORAGE_KEY = 'fundValuationTimeseries';
 
-function getStored() {
-  if (typeof window === 'undefined') return {};
-  try {
-    const parsed = storageStore.getItem(STORAGE_KEY);
-    return isPlainObject(parsed) ? parsed : {};
-  } catch {
-    return {};
+let memCache = null;
+let persistTimer = null;
+
+function ensureCache() {
+  if (typeof window === 'undefined') return null;
+  if (memCache === null) {
+    try {
+      const parsed = storageStore.getItem(STORAGE_KEY);
+      memCache = isPlainObject(parsed) ? parsed : {};
+    } catch {
+      memCache = {};
+    }
   }
+  return memCache;
 }
 
-function setStored(data) {
-  if (typeof window === 'undefined') return;
+function schedulePersist() {
+  if (typeof window === 'undefined' || persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    flushPersist();
+  }, 1500);
+}
+
+export function flushPersist() {
+  if (typeof window === 'undefined' || !memCache) return;
   try {
-    storageStore.setItem(STORAGE_KEY, JSON.stringify(data));
+    storageStore.setItem(STORAGE_KEY, JSON.stringify(memCache));
   } catch (e) {
     console.warn('valuationTimeseries persist failed', e);
   }
 }
 
-/**
- * 从 gztime 或 Date 得到日期字符串 YYYY-MM-DD
- */
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushPersist);
+  window.addEventListener('beforeunload', flushPersist);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPersist();
+  });
+}
+
+function getStored() {
+  if (typeof window === 'undefined') return {};
+  return ensureCache() || {};
+}
+
 function toDateStr(gztimeOrNow) {
   if (isString(gztimeOrNow) && /^\d{4}-\d{2}-\d{2}/.test(gztimeOrNow)) {
     return gztimeOrNow.slice(0, 10);
@@ -106,7 +134,7 @@ export function recordValuation(code, payload, dataSource = 1) {
   }
 
   all[code][ds] = nextList;
-  setStored(all);
+  schedulePersist();
   return nextList;
 }
 
@@ -122,7 +150,7 @@ export function setValuationSeries(code, dataSource, series) {
   const ds = String(dataSource || 1);
   if (!isPlainObject(all[code])) all[code] = {};
   all[code][ds] = series;
-  setStored(all);
+  schedulePersist();
 }
 
 /**
@@ -144,7 +172,8 @@ export function clearFund(code) {
   if (!(code in all)) return;
   const next = { ...all };
   delete next[code];
-  setStored(next);
+  memCache = next;
+  schedulePersist();
 }
 
 /**

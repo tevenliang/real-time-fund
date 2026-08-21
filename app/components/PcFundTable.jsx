@@ -287,7 +287,15 @@ const FundNameCell = memo(
     return (
       <div
         className="name-cell-content"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}
+        onClick={
+          onOpenCardDialog
+            ? (e) => {
+                if (e.target.closest('button, input, a, [role="button"]')) return;
+                onOpenCardDialog(original);
+              }
+            : undefined
+        }
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, cursor: onOpenCardDialog ? 'pointer' : undefined }}
       >
         {batchRemoveEnabled && isEditMode && (
           <label
