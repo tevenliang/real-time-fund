@@ -272,6 +272,7 @@ const [tooltipVisible, setTooltipVisible] = useState(false);
   const options = useMemo(() => {
     const colors = getChartThemeColors(theme);
     return {
+      animation: false,
       responsive: true,
       maintainAspectRatio: false,
       plugins: {

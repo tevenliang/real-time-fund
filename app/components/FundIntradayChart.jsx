@@ -147,6 +147,7 @@ export default function FundIntradayChart({
   const options = useMemo(() => {
     const colors = getChartThemeColors(theme);
     return {
+      animation: false,
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },

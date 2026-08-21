@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import * as Sentry from '@sentry/nextjs';
 import { AlertTriangleIcon, RotateCcwIcon } from 'lucide-react';
 import { isError, isFunction, isString } from 'lodash';
 import { toast as sonnerToast } from 'sonner';
@@ -34,10 +33,6 @@ export function notifyClientError(error, options = {}) {
   const title = options.title || '页面出现异常';
   const message = getErrorMessage(error);
   const silent = options.silent || shouldSilenceClientError(error);
-
-  try {
-    Sentry.captureException(error);
-  } catch {}
 
   if (silent) return;
 

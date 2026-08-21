@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -159,15 +159,9 @@ function MoreSection({
       </div>
       <AnimatePresence>
         {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
-            style={{ overflow: 'hidden' }}
-          >
+          <div style={{ overflow: 'hidden' }}>
             {content}
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </>
@@ -392,7 +386,7 @@ export default function Index({
   const showValuationTrend = false;
 
   return (
-    <motion.div
+    <div
       className="glass card"
       style={{
         position: 'relative',
@@ -1005,13 +999,7 @@ export default function Index({
               </div>
               <AnimatePresence>
                 {!collapsedCodes?.has(f.code) && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.3, ease: 'easeInOut' }}
-                    style={{ overflow: 'hidden' }}
-                  >
+                  <div style={{ overflow: 'hidden' }}>
                     {topHoldings.assetAllocation && topHoldings.assetAllocation.length > 0 && (
                       <div className="row" style={{ marginBottom: 12, marginTop: 4 }}>
                         {topHoldings.assetAllocation.map((item, idx) => (
@@ -1057,7 +1045,7 @@ export default function Index({
                         </div>
                       ))}
                     </div>
-                  </motion.div>
+                  </div>
                 )}
               </AnimatePresence>
             </>
@@ -1107,13 +1095,7 @@ export default function Index({
               </div>
               <AnimatePresence>
                 {!collapsedEarnings?.has(f.code) && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.3, ease: 'easeInOut' }}
-                    style={{ overflow: 'hidden' }}
-                  >
+                  <div style={{ overflow: 'hidden' }}>
                     {displayDailyEarningsSeries.length > 0 ? (
                       <FundDailyEarnings series={displayDailyEarningsSeries} theme={theme} masked={masked} />
                     ) : (
@@ -1124,13 +1106,13 @@ export default function Index({
                         </EmptyHeader>
                       </Empty>
                     )}
-                  </motion.div>
+                  </div>
                 )}
               </AnimatePresence>
             </>
           )}
         </>
       )}
-    </motion.div>
+    </div>
   );
 }

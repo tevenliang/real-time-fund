@@ -135,6 +135,7 @@ export default function FundDailyEarnings({ series = [], theme = 'dark', masked 
   const options = useMemo(() => {
     const colors = getChartThemeColors(theme);
     return {
+      animation: false,
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
