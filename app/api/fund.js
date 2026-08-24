@@ -1330,25 +1330,27 @@ export async function fetchFundBestSource(fundCode) {
     try {
       const v4 = await fetchFundValuationBySource(code, 4).catch(() => null);
       if (v4 && v4.gszzl != null) {
-        qc.setQueryData(cacheKey, 4, { staleTime: 60 * 60 * 1000 });
+        qc.setQueryData(cacheKey, 4, { staleTime: 30 * 60 * 1000 });
         return 4;
       }
     } catch {
-      /* gs_qdii 无数据，继续走标准源兜底 */
+      /* gs_qdii 无数据，QDII 基金不应回退到 A 股估值源（口径不同会误导用户），直接返回 null */
     }
+    return null;
   }
 
   // —— 非 QDII：并行获取各标准源（1 天天基金 / 2 新浪ds2 / 3 新浪ds3）实时估值 ——
-  const [v1s, v2s, v3s] = await Promise.allSettled([
-    fetchFundValuationBySource(code, 1).catch(() => null),
-    fetchFundValuationBySource(code, 2).catch(() => null),
-    fetchFundValuationBySource(code, 3).catch(() => null),
-  ]);
-  const v1 = v1s.status === 'fulfilled' ? v1s.value : null;
-  const v2 = v2s.status === 'fulfilled' ? v2s.value : null;
-  const v3 = v3s.status === 'fulfilled' ? v3s.value : null;
+  // 并行获取3个实时源；新浪源(ds2/ds3)共享同一个JSONP接口，浏览器并发限制下
+  // 同时发3个请求可能导致部分失败。用 asyncPool(2) 控制新浪源并发。
+  const sinaResults = await asyncPool(2, [2, 3], (ds) =>
+    fetchFundValuationBySource(code, ds).catch(() => null)
+  );
+  const v1p = fetchFundValuationBySource(code, 1).catch(() => null);
+  const v1 = await v1p;
+  const v2 = sinaResults[0];
+  const v3 = sinaResults[1];
   const vals = { 1: v1, 2: v2, 3: v3 };
-  const hasData = (srcId) => vals[srcId]?.gszzl != null;
+  const hasData = (srcId) => vals[srcId] != null && vals[srcId].gszzl != null;
 
   // 在所有“有实时数据”的源中，按口径精度优先级选择：
   //   新浪 ds3 > 新浪 ds2 > 天天基金 fundgz
@@ -1359,7 +1361,7 @@ export async function fetchFundBestSource(fundCode) {
   const accuracyOrder = [3, 2, 1];
   for (const id of accuracyOrder) {
     if (hasData(id)) {
-      qc.setQueryData(cacheKey, id, { staleTime: 60 * 60 * 1000 });
+      qc.setQueryData(cacheKey, id, { staleTime: 30 * 60 * 1000 });
       return id;
     }
   }
@@ -1371,7 +1373,7 @@ export async function fetchFundBestSource(fundCode) {
       const sourceName = Array.isArray(data) ? data[0]?.source : data?.source;
       const id = SOURCE_NAME_TO_ID[sourceName] ?? null;
       if (id != null) {
-        qc.setQueryData(cacheKey, id, { staleTime: 60 * 60 * 1000 });
+        qc.setQueryData(cacheKey, id, { staleTime: 30 * 60 * 1000 });
         return id;
       }
     }
