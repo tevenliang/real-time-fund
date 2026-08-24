@@ -1305,6 +1305,17 @@ export async function fetchBestValuationSource(code, jzrq, actualZzl) {
  */
 const SOURCE_NAME_TO_ID = { fundgz: 1, sina_ds2: 2, sina_ds3: 3, supabase_qdii: 4 };
 
+/**
+ * 安全调用估值源：失败返回 null 而非抛异常
+ */
+async function fetchFundValuationBySourceSafe(code, ds) {
+  try {
+    return await fetchFundValuationBySource(code, ds);
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchFundBestSource(fundCode) {
   if (!isSupabaseConfigured) return null;
   const code = fundCode != null ? String(fundCode).trim() : '';
@@ -1340,25 +1351,49 @@ export async function fetchFundBestSource(fundCode) {
   }
 
   // —— 非 QDII：并行获取各标准源（1 天天基金 / 2 新浪ds2 / 3 新浪ds3）实时估值 ——
-  // 并行获取3个实时源；新浪源(ds2/ds3)共享同一个JSONP接口，浏览器并发限制下
-  // 同时发3个请求可能导致部分失败。用 asyncPool(2) 控制新浪源并发。
-  const sinaResults = await asyncPool(2, [2, 3], (ds) =>
-    fetchFundValuationBySource(code, ds).catch(() => null)
-  );
-  const v1p = fetchFundValuationBySource(code, 1).catch(() => null);
-  const v1 = await v1p;
-  const v2 = sinaResults[0];
-  const v3 = sinaResults[1];
+  const [v1r, v2r, v3r] = await Promise.allSettled([
+    fetchFundValuationBySource(code, 1).catch(() => null),
+    fetchFundValuationBySourceSafe(code, 2),
+    fetchFundValuationBySourceSafe(code, 3),
+  ]);
+  const v1 = v1r.status === 'fulfilled' ? v1r.value : null;
+  const v2 = v2r.status === 'fulfilled' ? v2r.value : null;
+  const v3 = v3r.status === 'fulfilled' ? v3r.value : null;
   const vals = { 1: v1, 2: v2, 3: v3 };
   const hasData = (srcId) => vals[srcId] != null && vals[srcId].gszzl != null;
 
-  // 在所有“有实时数据”的源中，按口径精度优先级选择：
-  //   新浪 ds3 > 新浪 ds2 > 天天基金 fundgz
-  // 注：get_fund_best_source 当前对所有基金返回常量 fundgz（历史精度表无真实数据），
-  // 因此不能盲信 RPC 的历史最优（会永远把源1短路为首选）。这里改为“优先选有数据且
-  // 口径更细的新浪源”，既能修复“其它基金也被迫用源1”的问题，又不会因某个源缺数据而
-  // 显示“失效”（只要有任一源有数据就会被选中）。
-  const accuracyOrder = [3, 2, 1];
+  // —— 核心修正：用已公布的实际净值校验各源误差，选最准的 ——
+  // 背景：新浪 ds3(growthrate2) 部分基金口径偏差极大（如017290 -4.19% vs 实际-2.27%），
+  // 硬编码的"[3,2,1]优先级"会选中严重偏离的源。正确做法：若最新净值已公布，
+  // 比较 |估算-实际|，选误差最小者；否则按默认顺序兜底。
+  try {
+    const navMetrics = await fetchNavMetricsFromTrendFallback(code);
+    if (navMetrics && isNumber(navMetrics.zzl)) {
+      const actualZzl = Number(navMetrics.zzl);
+      let minDiff = Infinity;
+      let bestId = null;
+      for (const id of [1, 2, 3]) {
+        if (!hasData(id)) continue;
+        const est = Number(vals[id].gszzl);
+        if (!Number.isFinite(est)) continue;
+        const diff = Math.abs(est - actualZzl);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestId = id;
+        }
+      }
+      // 误差 ≤1.5pp 视为可信；超过则说明所有源都失真，走默认优先级
+      if (bestId != null && minDiff <= 1.5) {
+        qc.setQueryData(cacheKey, bestId, { staleTime: 30 * 60 * 1000 });
+        return bestId;
+      }
+    }
+  } catch (_) {
+    /* 校准失败走默认优先级 */
+  }
+
+  // 默认优先级：有数据的源中按 ds2 > ds3 > fundgz 选（ds2 相对更稳）
+  const accuracyOrder = [2, 3, 1];
   for (const id of accuracyOrder) {
     if (hasData(id)) {
       qc.setQueryData(cacheKey, id, { staleTime: 30 * 60 * 1000 });

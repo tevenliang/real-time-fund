@@ -21,7 +21,6 @@ import FundTrendChart from '../FundTrendChart';
 import FundValuationTrendChart from '../FundValuationTrendChart';
 import FundIntradayChart from '../FundIntradayChart';
 import FundResearchPanel from '../FundResearchPanel';
-import FundAnalysisPanel from '../FundAnalysisPanel';
 import FundDailyEarnings from '../FundDailyEarnings';
 import { ChevronIcon, SettingsIcon, StarIcon, SwitchIcon, TrashIcon, LinkIcon } from '../Icons';
 import { getTagThemeBadgeProps } from '../AddTagDialog';
@@ -889,7 +888,6 @@ export default function Index({
             {showValuationTrend && <TabsTrigger value="valuation_trend">估值走势</TabsTrigger>}
             {hasHoldingAmount && <TabsTrigger value="earnings">我的收益</TabsTrigger>}
             <TabsTrigger value="research">基金研究</TabsTrigger>
-            <TabsTrigger value="analysis">深度分析</TabsTrigger>
           </TabsList>
           {hasHoldings && (
             <TabsContent value="holdings" className="mt-3 outline-none">
@@ -973,9 +971,6 @@ export default function Index({
           )}
           <TabsContent value="research" className="mt-3 outline-none">
             <FundResearchPanel code={f.code} />
-          </TabsContent>
-          <TabsContent value="analysis" className="mt-3 outline-none">
-            <FundAnalysisPanel code={f.code} />
           </TabsContent>
         </Tabs>
       ) : (
