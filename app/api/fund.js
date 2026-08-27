@@ -8,6 +8,7 @@ import { getQueryClient } from '../lib/get-query-client';
 import * as qk from '../lib/query-keys';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { isTradingDay } from '../lib/tradingCalendar';
+import { getAllValuationSeriesRaw } from '../lib/valuationTimeseries';
 
 import { DEFAULT_TZ, ONE_DAY_MS } from '@/app/constants';
 
@@ -1676,11 +1677,42 @@ export const fetchFundData = async (c, overrideDataSource) => {
       }
     }
 
+    // 收盘后上游清空当日盘中估值，回退到本地缓存“当日最后一条”估值，避免显示成昨天
+    const todayStr = dayjs().tz(TZ).format('YYYY-MM-DD');
+    const freshIsToday = isString(baseData.gztime) && baseData.gztime.startsWith(todayStr) && Number.isFinite(Number(baseData.gszzl));
+    if (!freshIsToday) {
+      try {
+        const raw = getAllValuationSeriesRaw();
+        const dsMap = raw && raw[code];
+        if (dsMap && typeof dsMap === 'object') {
+          let best = null;
+          for (const series of Object.values(dsMap)) {
+            if (!isArray(series)) continue;
+            for (const p of series) {
+              if (isString(p?.date) && p.date === todayStr) {
+                const v = Number(p.value);
+                if (Number.isFinite(v) && (!best || String(p.time || '') > String(best.time || ''))) best = p;
+              }
+            }
+          }
+          if (best) {
+            const v = Number(best.value);
+            baseData.gsz = v;
+            baseData.gztime = `${best.date} ${best.time}`;
+            const nav = Number(baseData.dwjz);
+            if (Number.isFinite(nav) && nav > 0) baseData.gszzl = (v / nav - 1) * 100;
+            baseData.valuationFromCache = true;
+          }
+        }
+      } catch (_) {}
+    }
+
     resolve({
       ...baseData
     });
   });
 };
+
 
 export const fetchFundHoldings = async (code) => {
   if (!code) return { holdings: [], holdingsReportDate: null, holdingsIsLastQuarter: false };

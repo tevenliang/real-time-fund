@@ -149,6 +149,9 @@ export function setValuationSeries(code, dataSource, series) {
   const all = getStored();
   const ds = String(dataSource || 1);
   if (!isPlainObject(all[code])) all[code] = {};
+  const existing = isArray(all[code][ds]) ? all[code][ds] : [];
+  const maxDate = (arr) => arr.map((p) => p?.date).filter(Boolean).reduce((a, b) => (a > b ? a : b), '');
+  if (maxDate(existing) && maxDate(series) && maxDate(series) < maxDate(existing)) return; // 旧日期不覆盖当日
   all[code][ds] = series;
   schedulePersist();
 }
