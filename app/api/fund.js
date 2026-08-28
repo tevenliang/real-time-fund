@@ -35,6 +35,27 @@ const getFundNameFromLocalList = async (code) => {
   return _allFundNameCache ? _allFundNameCache.get(code) : null;
 };
 
+// 权威 QDII 名单（public/qdii.json，基于东方财富基金类型 QDII-*/指数型-海外*，由 VM 生成）
+let _qdiiCodeSet = null;
+let _qdiiSetPromise = null;
+const getQdiiCodeSet = async () => {
+  if (_qdiiCodeSet) return _qdiiCodeSet;
+  if (!_qdiiSetPromise) {
+    _qdiiSetPromise = fetch('/qdii.json')
+      .then((r) => r.json())
+      .then((list) => {
+        _qdiiCodeSet = new Set((Array.isArray(list) ? list : []).map((c) => String(c).trim()).filter(Boolean));
+        _qdiiSetPromise = null;
+      })
+      .catch(() => {
+        _qdiiSetPromise = null;
+        _qdiiCodeSet = new Set();
+      });
+  }
+  await _qdiiSetPromise;
+  return _qdiiCodeSet || new Set();
+};
+
 const getBrowserTimeZone = () => {
   if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -1219,17 +1240,9 @@ export const isQdiiFund = async (code) => {
     return await qc.fetchQuery({
       queryKey: qk.isQdiiFund(normalized),
       queryFn: async () => {
-        // 主路径：查 gs_qdii 表
-        if (isSupabaseConfigured) {
-          try {
-            const { data, error } = await withRetry(() =>
-              supabase.from('gs_qdii').select('fund_code').eq('fund_code', normalized).maybeSingle()
-            );
-            if (!error && data != null) return true;
-          } catch {
-            /* ignore and fall through */
-          }
-        }
+        // 主路径：权威 QDII 名单（基于东方财富基金类型：QDII-* / 指数型-海外*），不依赖被混合的 gs_qdii 表
+        const qdiiSet = await getQdiiCodeSet();
+        if (qdiiSet.has(normalized)) return true;
 
         // 回退：从 allFund.json 查名字判断是否含 "(QDII)" 标记
         try {
