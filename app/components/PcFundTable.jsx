@@ -1132,6 +1132,21 @@ const PcFundTable = memo(function PcFundTable({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const getEffectiveStickyTop = () => {
+      // 直接量取吸顶的 filter-bar 在视口中的实际底部，避免高度测量口径不一致
+      // （--market-index-height 用 contentRect 不含 padding，而 offsetHeight 含 padding/border）
+      // 导致表头吸顶位置偏低、顶部露出数据行缝隙。
+      const filterBarEl = document.querySelector('.filter-bar');
+      if (filterBarEl && filterBarEl.getBoundingClientRect().height > 0) {
+        let stickyTopValue = filterBarEl.getBoundingClientRect().bottom;
+        const stickySummaryWrapper = document.querySelector('.group-summary-sticky');
+        if (stickySummaryWrapper) {
+          const summaryBottom = stickySummaryWrapper.getBoundingClientRect().bottom;
+          if (summaryBottom > stickyTopValue + 4) stickyTopValue = summaryBottom;
+        }
+        return stickyTopValue;
+      }
+
+      // 兜底：旧口径
       const stickySummaryCard = document.querySelector('.group-summary-sticky .group-summary-card');
       const marketIndexEl = document.querySelector('.market-index-accordion-root');
       const currentMarketIndexHeight = marketIndexEl ? marketIndexEl.offsetHeight : 0;
@@ -1139,13 +1154,13 @@ const PcFundTable = memo(function PcFundTable({
 
       if (!stickySummaryCard) return baseStickyTop;
 
-      const stickySummaryWrapper = stickySummaryCard.closest('.group-summary-sticky');
-      if (!stickySummaryWrapper) return baseStickyTop;
+      const stickySummaryWrapper2 = stickySummaryCard.closest('.group-summary-sticky');
+      if (!stickySummaryWrapper2) return baseStickyTop;
 
-      const wrapperRect = stickySummaryWrapper.getBoundingClientRect();
+      const wrapperRect = stickySummaryWrapper2.getBoundingClientRect();
       const isSummaryStuck = wrapperRect.top <= baseStickyTop + 1;
 
-      return isSummaryStuck ? baseStickyTop + stickySummaryWrapper.offsetHeight : baseStickyTop;
+      return isSummaryStuck ? baseStickyTop + stickySummaryWrapper2.offsetHeight : baseStickyTop;
     };
 
     const updateVerticalState = () => {
