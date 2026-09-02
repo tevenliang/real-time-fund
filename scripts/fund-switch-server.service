@@ -1,0 +1,16 @@
+[Unit]
+Description=Real-time-Fund (基估宝) 总开关控制服务
+Documentation=监听 127.0.0.1:3010，仅 loopback
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/apps/real-time-fund/scripts
+ExecStart=/usr/bin/python3 /home/ubuntu/apps/real-time-fund/scripts/fund-switch-server.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

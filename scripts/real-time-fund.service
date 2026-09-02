@@ -1,0 +1,21 @@
+[Unit]
+Description=Real-time-Fund (基估宝) static site via Caddy
+Documentation=https://github.com/hzm0321/real-time-fund
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/apps/real-time-fund
+# 使用专用 Caddy 实例服务 out/ 静态目录，仅监听 127.0.0.1:3000
+# 由主 Caddy (systemd) 在 80/443 转发至此
+ExecStart=/usr/bin/caddy run --environ --config /home/ubuntu/apps/real-time-fund/scripts/Caddyfile
+ExecReload=/usr/bin/caddy reload --config /home/ubuntu/apps/real-time-fund/scripts/Caddyfile --force
+TimeoutStopSec=5
+LimitNOFILE=1048576
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

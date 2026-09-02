@@ -1,0 +1,33 @@
+{
+	# 禁用 admin API（专用实例，只服务静态文件）
+	admin off
+	auto_https off
+	email steven@aiflare.cloud
+}
+
+# 专用 Caddy 实例：仅监听 loopback，转发由主 Caddy 处理
+:3000 {
+	root * /home/ubuntu/apps/real-time-fund/out
+	encode gzip zstd
+	try_files {path} {path}.html {path}/ /index.html
+	file_server
+
+	# 静态资源缓存（与原 nginx 配置一致）
+	@assets {
+		path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.wasm
+	}
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	# 健康检查端点（总开关 API 用）
+	handle /__health {
+		respond "ok" 200
+	}
+
+	# 总开关控制端点
+	handle /__switch/start {
+		respond "starting" 200
+	}
+	handle /__switch/stop {
+		respond "stopping" 200
+	}
+}

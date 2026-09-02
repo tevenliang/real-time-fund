@@ -7,7 +7,7 @@ import SummaryTabContent from './components/SummaryTabContent';
 import FundListView from './components/FundListView';
 import NavLayout from './components/NavLayout';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Power } from 'lucide-react';
 import Image from 'next/image';
 
 import { createAvatar } from '@dicebear/core';
@@ -225,7 +225,9 @@ export default function HomePage() {
     setShowGroupDropdownMobile,
     isGroupSummarySticky,
     setIsGroupSummarySticky,
-    syncFromCustomSettings
+    syncFromCustomSettings,
+    fundEstimationEnabled,
+    toggleFundEstimation
   } = useSettingsStore();
 
   useEffect(() => {
@@ -293,6 +295,38 @@ export default function HomePage() {
 
   // --- 主题管理（抽离到 useTheme）---
   const { theme, showThemeTransition, setShowThemeTransition, handleThemeToggle } = useTheme();
+
+  // --- 基估宝总开关：调用后端 systemd 控制服务 ---
+  // 通过主 Caddy 同源代理 /__switch/* → 127.0.0.1:3010（避免 HTTPS→HTTP 混合内容/跨域问题）
+  // token 写在构建期注入（生产环境安全，因为 /__switch 仅本机可访问）
+  const FUND_SWITCH_TOKEN = 'yIiJhggqVjeEv42Y6088ToXqM7081W9HYR9rXptDZTk';
+  const handleFundEstimationToggle = async (next) => {
+    // 1) 先把 UI 状态切到目标值（乐观更新），避免用户连点
+    toggleFundEstimation(next);
+    try {
+      const res = await fetch('/__switch/' + (next ? 'on' : 'off'), {
+        method: 'POST',
+        headers: { 'X-Token': FUND_SWITCH_TOKEN }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        sonnerToast.error('开关失败：' + (data.message || res.status));
+        // 回滚
+        toggleFundEstimation(!next);
+        return;
+      }
+      if (data.active !== next) {
+        // 后端状态与请求不一致，回滚 UI
+        toggleFundEstimation(!next);
+        sonnerToast.error(next ? '启动失败' : '停止失败');
+        return;
+      }
+      sonnerToast.success(next ? '基估宝已启动' : '基估宝已停止');
+    } catch (e) {
+      sonnerToast.error('开关请求失败：' + (e?.message || e));
+      toggleFundEstimation(!next);
+    }
+  };
 
   // 动态计算 Navbar 和 FilterBar 高度（抽离到 useNavHeights）
   // 注意：isMobile 在此处尚未声明，shouldShowMarketIndex 由 page.jsx 内独立 useEffect 处理
@@ -4768,6 +4802,23 @@ export default function HomePage() {
               )}
             </div>
             <div className={`actions ${isSearchFocused || selectedFunds.length > 0 ? 'search-focused-sibling' : ''}`}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className={`icon-button fund-estimation-toggle ${fundEstimationEnabled ? 'active' : ''}`}
+                    aria-label={fundEstimationEnabled ? '基估宝运行中，点击关闭' : '基估宝已关闭，点击启动'}
+                    onClick={() => handleFundEstimationToggle(!fundEstimationEnabled)}
+                    style={{
+                      color: fundEstimationEnabled ? 'var(--success, #10b981)' : 'var(--muted)'
+                    }}
+                  >
+                    <Power width="18" height="18" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{fundEstimationEnabled ? '基估宝运行中（点击关闭）' : '基估宝已关闭（点击启动）'}</p>
+                </TooltipContent>
+              </Tooltip>
               <UpdateChecker onModalOpenChange={setIsUpdateModalOpen} />
               <span className="github-icon-wrap">
                 <Image

@@ -51,6 +51,21 @@ export const useSettingsStore = create((set) => ({
       isGroupSummarySticky: isFunction(val) ? val(useSettingsStore.getState().isGroupSummarySticky) : val
     }),
 
+  // 基估宝智能总开关（默认关闭，节省资源）
+  fundEstimationEnabled: false,
+
+  // 切换总开关
+  toggleFundEstimation: (enabled) =>
+    set({ fundEstimationEnabled: isFunction(enabled) ? enabled(useSettingsStore.getState().fundEstimationEnabled) : enabled }),
+
+  // 强制启动（即使在非交易日也启动）
+  forceStartFundEstimation: () =>
+    set({ fundEstimationEnabled: true }),
+
+  // 强制停止
+  forceStopFundEstimation: () =>
+    set({ fundEstimationEnabled: false }),
+
   /**
    * 从 customSettings 解析并同步配置到 Zustand 状态
    */

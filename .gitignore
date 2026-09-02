@@ -99,3 +99,7 @@ cli/
 
 # 不提交密钥
 .env
+
+# Fund switch control
+scripts/.switch-token
+

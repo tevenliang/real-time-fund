@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import ConfirmModal from './ConfirmModal';
 import { ResetIcon, SettingsIcon } from './Icons';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useSettingsStore } from '@/app/stores';
 
 export default function SettingsModal({
   onClose,
@@ -31,6 +32,7 @@ export default function SettingsModal({
   showGroupDropdownMobile = false
 }) {
   const isMobile = useIsMobile();
+  const { fundEstimationEnabled, toggleFundEstimation } = useSettingsStore();
   const [sliderDragging, setSliderDragging] = useState(false);
   const sliderDraggingRef = useRef(false);
   const [resetWidthConfirmOpen, setResetWidthConfirmOpen] = useState(false);
@@ -143,6 +145,45 @@ export default function SettingsModal({
             <DialogTitle asChild>
               <span>设置</span>
             </DialogTitle>
+          </div>
+
+          {/* 基估宝智能总开关 */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              marginBottom: 16,
+              background: fundEstimationEnabled
+                ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                : 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
+              borderRadius: 12,
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>{fundEstimationEnabled ? '🟢' : '🔴'}</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 2 }}>
+                  基估宝 {fundEstimationEnabled ? '运行中' : '已停止'}
+                </div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+                  {fundEstimationEnabled ? '常驻内存，自动刷新数据' : '已关闭，节省系统资源'}
+                </div>
+              </div>
+            </div>
+            <Switch
+              checked={fundEstimationEnabled}
+              onCheckedChange={(checked) => {
+                toggleFundEstimation(checked);
+              }}
+              style={{
+                '--tw-ring-color': 'white',
+                transform: 'scale(1.2)'
+              }}
+            />
           </div>
 
           <div className="form-group" style={{ marginBottom: 16 }}>

@@ -423,7 +423,9 @@ function normalizeEastmoneyScriptUrl(url) {
     parsed.searchParams.delete('_');
     parsed.searchParams.delete('_t');
     key = parsed.toString();
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[fund] Failed to normalize Eastmoney script URL:', e);
+  }
   return key;
 }
 
@@ -931,6 +933,7 @@ export const fetchFundDataFallback = async (c) => {
         reject(new Error('未能获取到基金数据'));
       }
     } catch (e) {
+      console.error('[fund] Fallback fund data error for code', c, e);
       reject(new Error('基金数据加载失败'));
     }
   });
@@ -953,7 +956,9 @@ function fundDebugLog(...args) {
     if (!fundDebugEnabled()) return;
 
     console.debug('[fund][debug]', ...args);
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[fund] Failed to log debug message:', e);
+  }
 }
 
 // ============================================================================
@@ -1131,7 +1136,9 @@ function fetchSinaEstimateNetworthResponse(code) {
       if (timer) clearTimeout(timer);
       try {
         delete window[callbackName];
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[fund] Failed to clean up window callback:', callbackName, e);
+      }
       if (document.body && document.body.contains(scriptSina)) {
         document.body.removeChild(scriptSina);
       }
@@ -1609,7 +1616,9 @@ export const fetchFundData = async (c, overrideDataSource) => {
           if (f.valuationSource) storedValuationSource = f.valuationSource;
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[fund] Failed to read stored fund data:', e);
+    }
   }
 
   // F10DataApi.aspx 已失效，直接使用 pingzhongdata 获取历史净值指标
@@ -1870,7 +1879,9 @@ export const fetchFundHoldings = async (code) => {
               };
               document.body.appendChild(scriptQuote);
             });
-          } catch (e) {}
+          } catch (e) {
+            console.warn('[fund] Failed to fetch stock quotes for holdings:', e);
+          }
         }
 
         let assetAllocation = [];
@@ -1896,7 +1907,9 @@ export const fetchFundHoldings = async (code) => {
             }
           }
           assetAllocation = parsedSeries;
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[fund] Failed to parse asset allocation:', e);
+        }
 
         resolveH({ holdings, holdingsReportDate, holdingsIsLastQuarter, assetAllocation });
         fundDebugLog('fetchFundHoldings resolved', {
