@@ -1,0 +1,71 @@
+{
+	email steven@aiflare.cloud
+}
+
+# === webdav (existing) ===
+https://dav.aiflare.cloud {
+	reverse_proxy 127.0.0.1:9001
+}
+
+# === aiflare.cloud + www.aiflare.cloud ===
+# 路径 /fund-ranking*  → 决策辅助评分/回测（fund-ranking-system）
+# 路径 /dsh*           → DSH Web UI
+# 其余路径              → real-time-fund 估值查询
+https://aiflare.cloud, https://www.aiflare.cloud {
+	encode gzip zstd
+
+	# /fund-ranking (含子路径) 指向 FastAPI (Python fund-ranking-system 容器, 8000)
+	handle_path /fund-ranking* {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up Host {host}
+			header_up X-Real-IP {remote}
+			header_up X-Forwarded-For {remote}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# /dsh → DSH Web UI
+	# /__switch → 基估宝总开关控制服务（同源代理，避免 HTTPS→HTTP 混合内容/跨域问题）
+	handle /__switch/* {
+		reverse_proxy 127.0.0.1:3010 {
+			header_up X-Token {header.X-Token}
+		}
+	}
+
+	# /api/research/* 与 /api/analysis/* → 基金研究 API（fund-research-internal.service, port 18081）
+	# 与原 nginx 配置一致：把 /api/research/<x> 改写为 /research/<x>（上游真实路由前缀）
+	handle_path /api/research/* {
+		# handle_path 已剥离前缀，{path} 是剩余部分（如 /110022）
+		# 需要在前面补 /research，才能匹配上游 /research/{code} 路由
+		rewrite * /research{path}
+		reverse_proxy 127.0.0.1:18081 {
+			header_up Host {host}
+			header_up X-Real-IP {remote}
+			header_up X-Forwarded-For {remote}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+	handle_path /api/analysis/* {
+		rewrite * /analysis{path}
+		reverse_proxy 127.0.0.1:18081 {
+			header_up Host {host}
+			header_up X-Real-IP {remote}
+			header_up X-Forwarded-For {remote}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	handle_path /dsh* {
+		reverse_proxy 127.0.0.1:3081
+	}
+
+	# 兜底：所有其他路径 → 基金估值 (real-time-fund, port 3000)
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
+
+# === DSH Web UI (subdomain) ===
+https://dsh.aiflare.cloud {
+	reverse_proxy 127.0.0.1:3081
+}
