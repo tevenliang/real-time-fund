@@ -321,7 +321,7 @@ export default function HomePage() {
         sonnerToast.error(next ? '启动失败' : '停止失败');
         return;
       }
-      sonnerToast.success(next ? '基估宝已启动' : '基估宝已停止');
+      sonnerToast.success(next ? '数据刷新已开启（实时估值+基金研究可用）' : '数据刷新已关闭（页面显示历史快照）');
     } catch (e) {
       sonnerToast.error('开关请求失败：' + (e?.message || e));
       toggleFundEstimation(!next);
@@ -4806,7 +4806,7 @@ export default function HomePage() {
                 <TooltipTrigger asChild>
                   <button
                     className={`icon-button fund-estimation-toggle ${fundEstimationEnabled ? 'active' : ''}`}
-                    aria-label={fundEstimationEnabled ? '基估宝运行中，点击关闭' : '基估宝已关闭，点击启动'}
+                    aria-label={fundEstimationEnabled ? '数据刷新已开启，点击关闭' : '数据刷新已关闭（页面显示历史快照），点击启动'}
                     onClick={() => handleFundEstimationToggle(!fundEstimationEnabled)}
                     style={{
                       color: fundEstimationEnabled ? 'var(--success, #10b981)' : 'var(--muted)'
@@ -4816,7 +4816,7 @@ export default function HomePage() {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{fundEstimationEnabled ? '基估宝运行中（点击关闭）' : '基估宝已关闭（点击启动）'}</p>
+                  <p>{fundEstimationEnabled ? '数据刷新已开启（点击关闭，页面将显示历史快照）' : '数据刷新已关闭（点击启动）'}</p>
                 </TooltipContent>
               </Tooltip>
               <UpdateChecker onModalOpenChange={setIsUpdateModalOpen} />

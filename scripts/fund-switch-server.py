@@ -25,9 +25,9 @@ from pathlib import Path
 HOST = "127.0.0.1"
 PORT = 3010
 SERVICES = [
-    "real-time-fund.service",
-    "fund-research-internal.service",
-    "fill-gs-qdii.timer",  # timer enable/disable 控制 fill_gs_qdii.py 是否被定时触发
+    # real-time-fund.service 不再受总开关控制 - 前端 SPA 始终服务，确保关闭后仍可访问页面查看历史快照
+    "fund-research-internal.service",  # 基金研究 API（波段/夏普/回撤）
+    "fill-gs-qdii.timer",  # timer 控制 fill_gs_qdii.py 是否被定时触发
 ]
 TOKEN_FILE = Path(__file__).resolve().parent / ".switch-token"
 
@@ -56,12 +56,12 @@ def _run(cmd: list[str], timeout: int = 30) -> tuple[bool, str]:
 
 
 def systemctl_one(action: str, service: str) -> tuple[bool, str]:
-    # 对 .service 用 start/stop，对 .timer 用 enable-now/disable-now
-    if service.endswith(".timer"):
-        if action == "start":
-            action = "enable"
-        elif action == "stop":
-            action = "disable"
+    """执行 systemctl 命令。
+    对 .timer 单元：
+      - "start" → "start"（让 timer 立即 active 并开始计时）+ "enable"
+      - "stop"  → "stop"（彻底停止，不再触发）+ "disable"（下次开机不自启）
+    对 .service 单元：直接 start/stop
+    """
     if action not in ("start", "stop", "is-active", "enable", "disable"):
         return False, f"unknown action {action!r}"
     return _run(["sudo", "-n", "systemctl", action, service])
@@ -69,17 +69,19 @@ def systemctl_one(action: str, service: str) -> tuple[bool, str]:
 
 def get_service_state(service: str) -> dict:
     """获取单元状态。
-    .service 用 is-active，.timer 用 is-enabled
+    .service：is-active
+    .timer：is-active（inactive=已停止）+ is-enabled
     """
     if service.endswith(".timer"):
-        ok, raw = systemctl_one("is-active", service)  # 用 is-active 检查 timer 是否在跑
-        # timer 没有"active"概念，真正要看的是 is-enabled
-        ok2, raw2 = _run(["sudo", "-n", "systemctl", "is-enabled", service])
+        ok_active, raw_active = _run(["sudo", "-n", "systemctl", "is-active", service])
+        ok_enabled, raw_enabled = _run(["sudo", "-n", "systemctl", "is-enabled", service])
+        # timer "开"=active(真的在跑/等待) + enabled(下次开机自启)
+        is_on = ok_active and raw_active == "active"
         return {
             "service": service,
-            "active": ok and raw == "active",
-            "enabled": ok2 and raw2 == "enabled",
-            "raw": raw,
+            "active": is_on,
+            "enabled": ok_enabled and raw_enabled == "enabled",
+            "raw": f"active={raw_active}, enabled={raw_enabled}",
             "kind": "timer",
         }
     else:
@@ -95,13 +97,8 @@ def get_service_state(service: str) -> dict:
 def get_state() -> dict:
     """所有服务的状态聚合 + 总开关判定。"""
     services = [get_service_state(s) for s in SERVICES]
-    # 对 .service：必须 active；对 .timer：必须 enabled
-    def is_on(s):
-        if s["kind"] == "timer":
-            return s.get("enabled", False)
-        return s["active"]
-    all_active = all(is_on(s) for s in services) and len(services) > 0
-    any_active = any(is_on(s) for s in services)
+    all_active = all(s["active"] for s in services) and len(services) > 0
+    any_active = any(s["active"] for s in services)
     return {
         "services": services,
         "active": all_active,
@@ -110,18 +107,34 @@ def get_state() -> dict:
 
 
 def apply_action(action: str) -> dict:
-    """对所有单元应用 start/stop（timer 自动映射到 enable/disable）。
-    对于 timer，disable 后还要 stop 关联的 service（防止正在跑的任务残留）。
+    """对所有单元应用 start/stop。
+    对 .timer 单元：
+      - start: start + enable
+      - stop:  stop + disable（关键：stop 才会立即停止等待，否则只是 disable，下次触发时间到了仍会咔哒）
     """
     results = []
     for s in SERVICES:
-        ok, msg = systemctl_one(action, s)
+        if action == "start":
+            if s.endswith(".timer"):
+                ok1, msg1 = systemctl_one("start", s)
+                ok2, msg2 = systemctl_one("enable", s)
+                ok, msg = ok1 and ok2, f"start: {msg1}; enable: {msg2}"
+            else:
+                ok, msg = systemctl_one("start", s)
+        elif action == "stop":
+            if s.endswith(".timer"):
+                ok1, msg1 = systemctl_one("stop", s)
+                ok2, msg2 = systemctl_one("disable", s)
+                ok, msg = ok1 and ok2, f"stop: {msg1}; disable: {msg2}"
+                # 额外 stop 关联 service（清理正在跑的任务）
+                service_name = s.replace(".timer", ".service")
+                ok3, msg3 = systemctl_one("stop", service_name)
+                results.append({"service": service_name, "ok": ok3, "message": msg3, "note": "killed running task"})
+            else:
+                ok, msg = systemctl_one("stop", s)
+        else:
+            ok, msg = False, f"unknown action {action!r}"
         results.append({"service": s, "ok": ok, "message": msg})
-        # 关闭时额外 stop 对应的 service（清理正在跑的任务）
-        if action == "stop" and s.endswith(".timer"):
-            service_name = s.replace(".timer", ".service")
-            ok2, msg2 = systemctl_one("stop", service_name)
-            results.append({"service": service_name, "ok": ok2, "message": msg2, "note": "killed running task"})
     return results
 
 
