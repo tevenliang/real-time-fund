@@ -227,7 +227,8 @@ export default function HomePage() {
     setIsGroupSummarySticky,
     syncFromCustomSettings,
     fundEstimationEnabled,
-    toggleFundEstimation
+    toggleFundEstimation,
+    syncFundEstimationFromServer
   } = useSettingsStore();
 
   useEffect(() => {
@@ -315,9 +316,9 @@ export default function HomePage() {
         toggleFundEstimation(!next);
         return;
       }
+      // 用服务端返回的真实状态校正本地（避免 UI 与后端漂移）
+      syncFundEstimationFromServer(Boolean(data.active));
       if (data.active !== next) {
-        // 后端状态与请求不一致，回滚 UI
-        toggleFundEstimation(!next);
         sonnerToast.error(next ? '启动失败' : '停止失败');
         return;
       }
@@ -327,6 +328,25 @@ export default function HomePage() {
       toggleFundEstimation(!next);
     }
   };
+
+  // 页面 mount 时从后端 /__switch/status 拉一次真实状态，覆盖本地默认值
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch('/__switch/status', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        if (!aborted && typeof data.active === 'boolean') {
+          syncFundEstimationFromServer(data.active);
+        }
+      } catch (e) {
+        // 网络/CORS/服务暂不可用时静默失败，保持本地 localStorage 状态
+      }
+    })();
+    return () => { aborted = true; };
+  }, [syncFundEstimationFromServer]);
 
   // 动态计算 Navbar 和 FilterBar 高度（抽离到 useNavHeights）
   // 注意：isMobile 在此处尚未声明，shouldShowMarketIndex 由 page.jsx 内独立 useEffect 处理

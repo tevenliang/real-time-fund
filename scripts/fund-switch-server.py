@@ -8,9 +8,19 @@
 - 鉴权：X-Token 头，token 写入 .switch-token（首次启动自动生成，仅 root 可读）
 - 所有 systemctl 操作走 sudo NOPASSWD（见 /etc/sudoers.d/fund-switch）
 
+【开机默认行为】
+读 /etc/fund-switch-boot.conf（缺省 off）。服务随 systemd 启动后立即按配置调整：
+- off → 对所有 SERVICES 单元 disable + stop（确保开关关闭时这些服务不会随开机自启）
+- on  → 对所有 SERVICES 单元 enable + start
+注意：fund-research-internal.service / fill-gs-qdii.timer 必须显式 disable，
+否则它们自身的 [Install] WantedBy=multi-user.target 会让它们开机自启，
+总开关的"关闭"语义会失效。
+
 总开关当前管理的服务：
-  - real-time-fund.service          → 基估宝静态站 (Caddy + out/)
   - fund-research-internal.service  → 基金研究 API (波段信号/夏普/回撤等, 端口 18081)
+  - fill-gs-qdii.timer              → QDII 数据填充定时器
+  - real-time-fund.service          → 基估宝静态站 (Caddy + out/) — 不受总开关控制，
+                                       关闭后页面仍可访问以查看历史快照
 """
 from __future__ import annotations
 import json
@@ -30,6 +40,35 @@ SERVICES = [
     "fill-gs-qdii.timer",  # timer 控制 fill_gs_qdii.py 是否被定时触发
 ]
 TOKEN_FILE = Path(__file__).resolve().parent / ".switch-token"
+
+# 开机默认状态：读取 /etc/fund-switch-boot.conf（缺省 off）
+# 配置格式：单行，"on" / "off"，大小写不敏感；缺省文件或空内容按 off 处理
+BOOT_CONFIG = Path("/etc/fund-switch-boot.conf")
+BOOT_DEFAULT = "off"  # 缺省关闭，避免 systemd [Install] 自动 enable fund-research-internal / fill-gs-qdii.timer
+
+
+def read_boot_default() -> str:
+    """读取开机默认状态。off=on"""
+    try:
+        v = BOOT_CONFIG.read_text().strip().lower()
+        if v in ("on", "off"):
+            return v
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+    return BOOT_DEFAULT
+
+
+def apply_boot_default() -> None:
+    """开机时按 BOOT_DEFAULT 对 SERVICES 应用 start 或 stop，并打印日志。"""
+    target = read_boot_default()
+    action = "start" if target == "on" else "stop"
+    print(f"[fund-switch] boot default = {target!r} → {action}", file=sys.stderr)
+    try:
+        apply_action(action)
+    except Exception as e:
+        print(f"[fund-switch] boot default apply failed: {e}", file=sys.stderr)
 
 
 def get_token() -> str:
@@ -188,6 +227,9 @@ class Handler(BaseHTTPRequestHandler):
 _token = get_token()
 print(f"[fund-switch] token = {_token}", file=sys.stderr)
 print(f"[fund-switch] serving on {HOST}:{PORT} for services {SERVICES}", file=sys.stderr)
+
+# 开机时按 /etc/fund-switch-boot.conf 应用总开关默认状态
+apply_boot_default()
 
 try:
     server = ThreadingHTTPServer((HOST, PORT), Handler)

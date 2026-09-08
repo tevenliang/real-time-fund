@@ -52,19 +52,41 @@ export const useSettingsStore = create((set) => ({
     }),
 
   // 基估宝智能总开关（默认关闭，节省资源）
+  // 持久化到 localStorage，页面刷新后恢复；UI 启动时由 page.jsx 调 /__switch/status 用后端真实状态覆盖
   fundEstimationEnabled: false,
 
-  // 切换总开关
-  toggleFundEstimation: (enabled) =>
-    set({ fundEstimationEnabled: isFunction(enabled) ? enabled(useSettingsStore.getState().fundEstimationEnabled) : enabled }),
+  // 切换总开关（写本地 + localStorage 同步）
+  toggleFundEstimation: (enabled) => {
+    const next = isFunction(enabled) ? enabled(useSettingsStore.getState().fundEstimationEnabled) : enabled;
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('fundEstimationEnabled', JSON.stringify(Boolean(next))); } catch (e) { /* ignore */ }
+    }
+    set({ fundEstimationEnabled: Boolean(next) });
+  },
 
   // 强制启动（即使在非交易日也启动）
-  forceStartFundEstimation: () =>
-    set({ fundEstimationEnabled: true }),
+  forceStartFundEstimation: () => {
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('fundEstimationEnabled', 'true'); } catch (e) { /* ignore */ }
+    }
+    set({ fundEstimationEnabled: true });
+  },
 
   // 强制停止
-  forceStopFundEstimation: () =>
-    set({ fundEstimationEnabled: false }),
+  forceStopFundEstimation: () => {
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('fundEstimationEnabled', 'false'); } catch (e) { /* ignore */ }
+    }
+    set({ fundEstimationEnabled: false });
+  },
+
+  // 用后端真实状态覆盖本地（页面 mount 时调一次，开关成功后用 server 返回的 active 校正）
+  syncFundEstimationFromServer: (serverActive) => {
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('fundEstimationEnabled', JSON.stringify(Boolean(serverActive))); } catch (e) { /* ignore */ }
+    }
+    set({ fundEstimationEnabled: Boolean(serverActive) });
+  },
 
   /**
    * 从 customSettings 解析并同步配置到 Zustand 状态
@@ -105,3 +127,18 @@ export const useSettingsStore = create((set) => ({
     }
   }
 }));
+
+/**
+ * 从 localStorage 恢复 fundEstimationEnabled（在客户端 mount 后调用一次）
+ * 真正的权威状态来自后端 /__switch/status，page.jsx 会进一步覆盖
+ */
+export const hydrateFundEstimationFromLocal = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem('fundEstimationEnabled');
+    if (raw === null) return;
+    const v = raw === 'true' || raw === true;
+    useSettingsStore.setState({ fundEstimationEnabled: v });
+  } catch (e) { /* ignore */ }
+};
+
