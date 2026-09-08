@@ -9,8 +9,6 @@
 :3000 {
 	root * /home/ubuntu/apps/real-time-fund/out
 	encode gzip zstd
-	try_files {path} {path}.html {path}/ /index.html
-	file_server
 
 	# 静态资源缓存（与原 nginx 配置一致）
 	@assets {
@@ -23,11 +21,37 @@
 		respond "ok" 200
 	}
 
-	# 总开关控制端点
-	handle /__switch/start {
-		respond "starting" 200
+	# 总开关控制端点（反代到 fund-switch-server 127.0.0.1:3010）
+	# 前端路径 /__switch/{on,off,status} → 后端路径 /switch/{on,off} 或 /status
+	@switchOn  path /__switch/on
+	@switchOff path /__switch/off
+	@switchStatus path /__switch/status
+
+	handle @switchOn {
+		rewrite * /switch/on
+		reverse_proxy 127.0.0.1:3010 {
+			header_up Host 127.0.0.1:3010
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
-	handle /__switch/stop {
-		respond "stopping" 200
+	handle @switchOff {
+		rewrite * /switch/off
+		reverse_proxy 127.0.0.1:3010 {
+			header_up Host 127.0.0.1:3010
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+	handle @switchStatus {
+		rewrite * /status
+		reverse_proxy 127.0.0.1:3010 {
+			header_up Host 127.0.0.1:3010
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+	# 兜底：所有未匹配的请求走 file_server + try_files（SPA 路由）
+	handle {
+		try_files {path} {path}.html {path}/ /index.html
+		file_server
 	}
 }
